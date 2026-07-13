@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d StudentDB -Q \"DELETE FROM UserRoles; DELETE FROM RoleFeatures; DELETE FROM Users; DELETE FROM Roles; DELETE FROM Features;\" 2>&1)",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d StudentDB -Q \"SELECT Username, KeycloakId, IsActive FROM Users;\" 2>&1)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:5000/api/me\" -UseBasicParsing -ErrorAction SilentlyContinue)",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d StudentDB -Q \"SELECT recovery_model_desc FROM sys.databases WHERE name = 'StudentDB';\")",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d ProductCategoryDB -Q \"SELECT u.Username, u.KeycloakId, r.Name AS Role, f.Code AS Feature FROM Users u LEFT JOIN UserRoles ur ON u.Id = ur.UserId LEFT JOIN Roles r ON ur.RoleId = r.Id LEFT JOIN RoleFeatures rf ON r.Id = rf.RoleId LEFT JOIN Features f ON rf.FeatureId = f.Id;\")",
+      "PowerShell($token = \\(Invoke-RestMethod -Uri \"http://localhost:8080/realms/master/protocol/openid-connect/token\" -Method POST -ContentType \"application/x-www-form-urlencoded\" -Body \"grant_type=password&client_id=admin-cli&username=admin&password=admin@123\"\\).access_token; $users = Invoke-RestMethod -Uri \"http://localhost:8080/admin/realms/userloginapp/users?username=admin&exact=true\" -Headers @{ Authorization = \"Bearer $token\" }; $users | Select-Object id, username, email, enabled | Format-Table)",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d ProductCategoryDB -Q \"UPDATE Users SET KeycloakId = 'b2c89f74-6012-4e6b-a83a-ee60e7cd34f9' WHERE Username = 'admin'; SELECT Username, KeycloakId FROM Users WHERE Username = 'admin';\")",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d ProductCategoryDB -Q \"SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId;\")",
+      "PowerShell($token = \\(Invoke-RestMethod -Uri \"http://localhost:8080/realms/master/protocol/openid-connect/token\" -Method POST -ContentType \"application/x-www-form-urlencoded\" -Body \"grant_type=password&client_id=admin-cli&username=admin&password=admin@123\"\\).access_token; $users = Invoke-RestMethod -Uri \"http://localhost:8080/admin/realms/userloginapp/users\" -Headers @{ Authorization = \"Bearer $token\" }; foreach \\($u in $users\\) { Invoke-RestMethod -Uri \"http://localhost:8080/admin/realms/userloginapp/users/$\\($u.id\\)\" -Method DELETE -Headers @{ Authorization = \"Bearer $token\" }; Write-Host \"Deleted: $\\($u.username\\)\" })",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d ProductCategoryDB -Q \"SELECT Username, KeycloakId, IsActive FROM Users;\")",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d ProductCategoryDB -Q \"SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME IN \\('Categories','Products'\\) ORDER BY TABLE_NAME, ORDINAL_POSITION;\")",
+      "PowerShell(sqlcmd -S \"PRODUCT-TECH\\\\SQLEXPRESS\" -d ProductCategoryDB -Q \"SELECT Username, Email, KeycloakId, IsActive FROM Users;\" 2>&1)",
+      "PowerShell($token = \\(Invoke-RestMethod -Uri \"http://localhost:8080/realms/master/protocol/openid-connect/token\" -Method POST -ContentType \"application/x-www-form-urlencoded\" -Body \"grant_type=password&client_id=admin-cli&username=admin&password=admin@123\"\\).access_token; $users = Invoke-RestMethod -Uri \"http://localhost:8080/admin/realms/userloginapp/users?max=100\" -Headers @{ Authorization = \"Bearer $token\" }; $users | Select-Object id, username, email, enabled | Format-Table -AutoSize)"
+    ]
+  }
+}

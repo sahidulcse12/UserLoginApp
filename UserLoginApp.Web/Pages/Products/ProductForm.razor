@@ -1,0 +1,99 @@
+@page "/products/create"
+@page "/products/edit/{Id:guid}"
+@attribute [Authorize]
+@inject ApiService Api
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsEdit ? "Edit Product" : "New Product")</PageTitle>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="/products" class="btn btn-sm btn-outline-secondary me-2">← Back</a>
+    <h4 class="mb-0">@(IsEdit ? "Edit Product" : "New Product")</h4>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card" style="max-width:480px">
+    <div class="card-body">
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label class="form-label">Code <span class="text-danger">*</span></label>
+                <InputText class="form-control" @bind-Value="_model.Code" placeholder="e.g. PROD001" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Name <span class="text-danger">*</span></label>
+                <InputText class="form-control" @bind-Value="_model.Name" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Category <span class="text-danger">*</span></label>
+                <InputSelect class="form-select" @bind-Value="_model.CategoryId">
+                    <option value="">-- Select Category --</option>
+                    @foreach (var cat in _categories)
+                    {
+                        <option value="@cat.Id">@cat.Name (@cat.Code)</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Remarks</label>
+                <InputTextArea class="form-control" @bind-Value="_model.Remarks" rows="3" />
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" disabled="@_loading">
+                    @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    @(IsEdit ? "Save Changes" : "Create Product")
+                </button>
+                <a href="/products" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+    private ProductFormModel _model = new();
+    private List<CategoryDto> _categories = new();
+    private bool _loading;
+    private string _error = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _categories = await Api.GetCategoriesLookupAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!IsEdit) return;
+        var p = await Api.GetProductAsync(Id!.Value);
+        if (p != null)
+        {
+            _model.Code = p.Code;
+            _model.Name = p.Name;
+            _model.CategoryId = p.CategoryId;
+            _model.Remarks = p.Remarks;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _loading = true;
+        _error = string.Empty;
+
+        var (success, error) = IsEdit
+            ? await Api.UpdateProductAsync(Id!.Value, _model)
+            : await Api.CreateProductAsync(_model);
+
+        if (success)
+            Navigation.NavigateTo("/products");
+        else
+            _error = string.IsNullOrEmpty(error) ? "An error occurred." : error;
+
+        _loading = false;
+    }
+}

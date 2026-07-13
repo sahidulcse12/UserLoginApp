@@ -1,0 +1,108 @@
+@page "/roles/{RoleId:guid}/features"
+@attribute [Authorize]
+@inject ApiService Api
+@inject NavigationManager Navigation
+
+<PageTitle>Role Features</PageTitle>
+
+<div class="d-flex align-items-center mb-3">
+    <a href="/roles" class="btn btn-sm btn-outline-secondary me-2">← Back</a>
+    <h4 class="mb-0">Feature Access — @_roleName</h4>
+</div>
+
+@if (_loading)
+{
+    <div class="spinner-border"></div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header bg-success text-white">Assigned Features</div>
+                <ul class="list-group list-group-flush">
+                    @if (!_assigned.Any())
+                    {
+                        <li class="list-group-item text-muted">No features assigned</li>
+                    }
+                    @foreach (var f in _assigned)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">@f.Name</div>
+                                <small class="text-muted">@f.Code</small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Remove(f.Id)">Remove</button>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">Available Features</div>
+                <ul class="list-group list-group-flush">
+                    @foreach (var f in _available)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">@f.Name</div>
+                                <small class="text-muted">@f.Code</small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-success" @onclick="() => Assign(f.Id)">Assign</button>
+                        </li>
+                    }
+                    @if (!_available.Any())
+                    {
+                        <li class="list-group-item text-muted">All features assigned</li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid RoleId { get; set; }
+
+    private string _roleName = string.Empty;
+    private List<FeatureDto> _allFeatures = new();
+    private List<FeatureDto> _assigned = new();
+    private List<FeatureDto> _available = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var role = await Api.GetRoleAsync(RoleId);
+        if (role == null) { Navigation.NavigateTo("/roles"); return; }
+        _roleName = role.Name;
+        _allFeatures = await Api.GetAllFeaturesAsync();
+        RefreshLists(role.Features);
+        _loading = false;
+    }
+
+    private void RefreshLists(List<string> assignedCodes)
+    {
+        _assigned = _allFeatures.Where(f => assignedCodes.Contains(f.Code)).ToList();
+        _available = _allFeatures.Where(f => !assignedCodes.Contains(f.Code)).ToList();
+    }
+
+    private async Task Assign(Guid featureId)
+    {
+        await Api.AssignRoleFeatureAsync(RoleId, featureId);
+        await Reload();
+    }
+
+    private async Task Remove(Guid featureId)
+    {
+        await Api.RemoveRoleFeatureAsync(RoleId, featureId);
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        var role = await Api.GetRoleAsync(RoleId);
+        if (role != null) RefreshLists(role.Features);
+    }
+}

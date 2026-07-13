@@ -1,0 +1,101 @@
+@page "/users"
+@attribute [Authorize]
+@inject ApiService Api
+@inject NavigationManager Navigation
+
+<PageTitle>Users</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>Users</h4>
+    <a href="/users/create" class="btn btn-primary btn-sm">+ New User</a>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-4"><div class="spinner-border"></div></div>
+}
+else if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Username</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Roles</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in _users)
+                {
+                    <tr>
+                        <td>@user.Username</td>
+                        <td>@user.FirstName @user.LastName</td>
+                        <td>@user.Email</td>
+                        <td>
+                            @foreach (var role in user.Roles)
+                            {
+                                <span class="badge bg-secondary me-1">@role</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="badge @(user.IsActive ? "bg-success" : "bg-danger")">
+                                @(user.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>@user.CreatedAt.ToLocalTime().ToString("dd-MMM-yyyy")</td>
+                        <td>
+                            <a href="/users/edit/@user.Id" class="btn btn-sm btn-outline-primary me-1">Edit</a>
+                            <a href="/users/@user.Id/roles" class="btn btn-sm btn-outline-secondary me-1">Roles</a>
+                            @if (user.IsActive)
+                            {
+                                <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => SetActive(user.Id, false)">Deactivate</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-success me-1" @onclick="() => SetActive(user.Id, true)">Activate</button>
+                            }
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => Delete(user.Id)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<UserDto> _users = new();
+    private bool _loading = true;
+    private string _error = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await LoadUsers();
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        try { _users = await Api.GetUsersAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        _loading = false;
+    }
+
+    private async Task SetActive(Guid id, bool active)
+    {
+        await Api.SetUserActiveAsync(id, active);
+        await LoadUsers();
+    }
+
+    private async Task Delete(Guid id)
+    {
+        await Api.DeleteUserAsync(id);
+        await LoadUsers();
+    }
+}
