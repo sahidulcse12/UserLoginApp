@@ -18,7 +18,9 @@ public class MeController : ControllerBase
     public async Task<IActionResult> GetMe()
     {
         var keycloakId = User.FindFirst("sub")?.Value;
-        if (string.IsNullOrEmpty(keycloakId))
+        var preferredUsername = User.FindFirst("preferred_username")?.Value;
+
+        if (string.IsNullOrEmpty(keycloakId) && string.IsNullOrEmpty(preferredUsername))
             return Unauthorized();
 
         var user = await _db.Users
@@ -26,7 +28,7 @@ public class MeController : ControllerBase
                 .ThenInclude(ur => ur.Role)
                     .ThenInclude(r => r.RoleFeatures)
                         .ThenInclude(rf => rf.Feature)
-            .FirstOrDefaultAsync(u => u.KeycloakId == keycloakId);
+            .FirstOrDefaultAsync(u => u.KeycloakId == keycloakId || (!string.IsNullOrEmpty(preferredUsername) && u.Username == preferredUsername));
 
         if (user == null)
             return NotFound(new { message = "User not found in application database." });

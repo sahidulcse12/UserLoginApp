@@ -18,7 +18,9 @@ public class FeatureClaimsTransformation : IClaimsTransformation
             return principal;
 
         var keycloakId = principal.FindFirst("sub")?.Value;
-        if (string.IsNullOrEmpty(keycloakId))
+        var preferredUsername = principal.FindFirst("preferred_username")?.Value;
+
+        if (string.IsNullOrEmpty(keycloakId) && string.IsNullOrEmpty(preferredUsername))
             return principal;
 
         var user = await _db.Users
@@ -26,10 +28,17 @@ public class FeatureClaimsTransformation : IClaimsTransformation
                 .ThenInclude(ur => ur.Role)
                     .ThenInclude(r => r.RoleFeatures)
                         .ThenInclude(rf => rf.Feature)
-            .FirstOrDefaultAsync(u => u.KeycloakId == keycloakId && u.IsActive);
+            .FirstOrDefaultAsync(u => (u.KeycloakId == keycloakId || (!string.IsNullOrEmpty(preferredUsername) && u.Username == preferredUsername)) && u.IsActive);
 
         if (user == null)
             return principal;
+
+        // Auto-link KeycloakId if it was not stored during seeder/creation
+        if (!string.IsNullOrEmpty(keycloakId) && user.KeycloakId != keycloakId)
+        {
+            user.KeycloakId = keycloakId;
+            await _db.SaveChangesAsync();
+        }
 
         var identity = new ClaimsIdentity();
 
