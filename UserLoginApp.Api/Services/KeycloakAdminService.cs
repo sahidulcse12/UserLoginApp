@@ -41,7 +41,7 @@ public class KeycloakAdminService : IKeycloakAdminService
             ["password"] = AdminPassword
         });
 
-        var response = await _http.PostAsync($"{BaseUrl}/realms/master/protocol/openid-connect/token", form);
+        var response = await _http.PostAsync($"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token", form);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
