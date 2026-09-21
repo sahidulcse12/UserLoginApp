@@ -79,11 +79,9 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserLoginApp API v1");
-    c.RoutePrefix = string.Empty; // Swagger UI served at http://localhost:5000/
-});
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserLoginApp API v1"));
+
+app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.UseCors();
 app.UseAuthentication();
