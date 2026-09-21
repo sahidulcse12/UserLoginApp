@@ -17,22 +17,21 @@ public class KeycloakAdminService : IKeycloakAdminService
 {
     private readonly IConfiguration _config;
     private readonly ILogger<KeycloakAdminService> _logger;
-    private readonly HttpClient _http;
+
+    public KeycloakAdminService(IConfiguration config, ILogger<KeycloakAdminService> logger)
+    {
+        _config = config;
+        _logger = logger;
+    }
 
     private string BaseUrl => _config["Keycloak:BaseUrl"]!;
     private string Realm => _config["Keycloak:Realm"]!;
     private string AdminUsername => _config["Keycloak:AdminUsername"]!;
     private string AdminPassword => _config["Keycloak:AdminPassword"]!;
 
-    public KeycloakAdminService(IConfiguration config, ILogger<KeycloakAdminService> logger)
-    {
-        _config = config;
-        _logger = logger;
-        _http = new HttpClient();
-    }
-
     private async Task<string> GetAdminTokenAsync()
     {
+        using var client = new HttpClient();
         var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["grant_type"] = "password",
@@ -41,7 +40,7 @@ public class KeycloakAdminService : IKeycloakAdminService
             ["password"] = AdminPassword
         });
 
-        var response = await _http.PostAsync($"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token", form);
+        var response = await client.PostAsync($"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token", form);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -51,8 +50,9 @@ public class KeycloakAdminService : IKeycloakAdminService
     private async Task<HttpClient> AuthorizedClientAsync()
     {
         var token = await GetAdminTokenAsync();
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return _http;
+        var client = new HttpClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     public async Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password)
