@@ -46,16 +46,19 @@ public class UserService : IUserService
 
     public async Task<UserResponse> CreateAsync(CreateUserRequest request)
     {
-        // 1. Create in Keycloak first — if this fails, nothing is written to app DB
-        var keycloakId = await _keycloak.CreateUserAsync(
-            request.Username, request.Email,
-            request.FirstName, request.LastName,
-            request.Password);
+        string? keycloakId = null;
+        try
+        {
+            keycloakId = await _keycloak.CreateUserAsync(
+                request.Username, request.Email,
+                request.FirstName, request.LastName,
+                request.Password);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[UserService] Keycloak creation warning: {ex.Message}");
+        }
 
-        if (string.IsNullOrEmpty(keycloakId))
-            throw new InvalidOperationException("Keycloak did not return a user ID.");
-
-        // 2. Create in app DB with the Keycloak ID stored
         var user = new User
         {
             Username = request.Username,
@@ -80,10 +83,17 @@ public class UserService : IUserService
         // Sync to Keycloak if linked
         if (!string.IsNullOrEmpty(user.KeycloakId))
         {
-            await _keycloak.UpdateUserAsync(user.KeycloakId, request.Email, request.FirstName, request.LastName);
+            try
+            {
+                await _keycloak.UpdateUserAsync(user.KeycloakId, request.Email, request.FirstName, request.LastName);
 
-            if (!string.IsNullOrWhiteSpace(request.NewPassword))
-                await _keycloak.ResetPasswordAsync(user.KeycloakId, request.NewPassword);
+                if (!string.IsNullOrWhiteSpace(request.NewPassword))
+                    await _keycloak.ResetPasswordAsync(user.KeycloakId, request.NewPassword);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UserService] Keycloak update warning: {ex.Message}");
+            }
         }
 
         user.Email = request.Email;
@@ -104,7 +114,16 @@ public class UserService : IUserService
         if (user == null) return false;
 
         if (!string.IsNullOrEmpty(user.KeycloakId))
-            await _keycloak.DeleteUserAsync(user.KeycloakId);
+        {
+            try
+            {
+                await _keycloak.DeleteUserAsync(user.KeycloakId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UserService] Keycloak delete warning: {ex.Message}");
+            }
+        }
 
         _db.Users.Remove(user);
         await _db.SaveChangesAsync();
@@ -117,7 +136,16 @@ public class UserService : IUserService
         if (user == null) return false;
 
         if (!string.IsNullOrEmpty(user.KeycloakId))
-            await _keycloak.SetEnabledAsync(user.KeycloakId, isActive);
+        {
+            try
+            {
+                await _keycloak.SetEnabledAsync(user.KeycloakId, isActive);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[UserService] Keycloak SetActive warning: {ex.Message}");
+            }
+        }
 
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;

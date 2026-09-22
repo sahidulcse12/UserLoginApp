@@ -12,8 +12,6 @@ public class AppDbContext : DbContext
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<Feature> Features => Set<Feature>();
     public DbSet<RoleFeature> RoleFeatures => Set<RoleFeature>();
-    public DbSet<Category> Categories => Set<Category>();
-    public DbSet<Product> Products => Set<Product>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,18 +56,5 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Feature>()
             .HasIndex(f => f.Code)
             .IsUnique();
-
-        modelBuilder.Entity<Category>()
-            .HasIndex(c => c.Code)
-            .IsUnique();
-
-        modelBuilder.Entity<Product>()
-            .HasIndex(p => p.Code)
-            .IsUnique();
-
-        modelBuilder.Entity<Product>()
-            .HasOne(p => p.Category)
-            .WithMany(c => c.Products)
-            .HasForeignKey(p => p.CategoryId);
     }
 }

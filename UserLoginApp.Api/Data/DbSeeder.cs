@@ -14,27 +14,19 @@ public static class DbSeeder
 
         var features = new List<Feature>
         {
-            new() { Id = Guid.NewGuid(), Name = "User Management",     Code = "USER_MANAGEMENT",     Description = "Create, update, delete and manage users" },
-            new() { Id = Guid.NewGuid(), Name = "Role Management",     Code = "ROLE_MANAGEMENT",     Description = "Create roles and assign features" },
-            new() { Id = Guid.NewGuid(), Name = "Category Management", Code = "CATEGORY_MANAGEMENT", Description = "Create and manage categories" },
-            new() { Id = Guid.NewGuid(), Name = "Product Management",  Code = "PRODUCT_MANAGEMENT",  Description = "Create and manage products" },
+            new() { Id = Guid.NewGuid(), Name = "User Management", Code = "USER_MANAGEMENT", Description = "Create, update, delete and manage users" },
+            new() { Id = Guid.NewGuid(), Name = "Role Management", Code = "ROLE_MANAGEMENT", Description = "Create roles and assign features" }
         };
         await db.Features.AddRangeAsync(features);
 
         var featureMap = features.ToDictionary(f => f.Code);
 
-        var adminRole     = new Role { Id = Guid.NewGuid(), Name = "Admin",     Description = "System administrator" };
-        var managerRole   = new Role { Id = Guid.NewGuid(), Name = "Manager",   Description = "Category manager" };
-        var executiveRole = new Role { Id = Guid.NewGuid(), Name = "Executive", Description = "Product executive" };
-        await db.Roles.AddRangeAsync(adminRole, managerRole, executiveRole);
+        var adminRole = new Role { Id = Guid.NewGuid(), Name = "Admin", Description = "System administrator" };
+        await db.Roles.AddAsync(adminRole);
 
-        await db.RoleFeatures.AddRangeAsync(
-            new() { RoleId = adminRole.Id,     FeatureId = featureMap["USER_MANAGEMENT"].Id },
-            new() { RoleId = adminRole.Id,     FeatureId = featureMap["ROLE_MANAGEMENT"].Id },
-            new() { RoleId = adminRole.Id,     FeatureId = featureMap["CATEGORY_MANAGEMENT"].Id },
-            new() { RoleId = adminRole.Id,     FeatureId = featureMap["PRODUCT_MANAGEMENT"].Id },
-            new() { RoleId = managerRole.Id,   FeatureId = featureMap["CATEGORY_MANAGEMENT"].Id },
-            new() { RoleId = executiveRole.Id, FeatureId = featureMap["PRODUCT_MANAGEMENT"].Id }
+        db.RoleFeatures.AddRange(
+            new RoleFeature { RoleId = adminRole.Id, FeatureId = featureMap["USER_MANAGEMENT"].Id },
+            new RoleFeature { RoleId = adminRole.Id, FeatureId = featureMap["ROLE_MANAGEMENT"].Id }
         );
 
         // Sync admin user to Keycloak, store the returned Keycloak ID

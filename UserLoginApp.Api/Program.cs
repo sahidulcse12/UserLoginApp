@@ -60,8 +60,6 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("UserManagement",     p => p.RequireClaim(featureClaimType, "USER_MANAGEMENT"));
     options.AddPolicy("RoleManagement",     p => p.RequireClaim(featureClaimType, "ROLE_MANAGEMENT"));
-    options.AddPolicy("CategoryManagement", p => p.RequireClaim(featureClaimType, "CATEGORY_MANAGEMENT"));
-    options.AddPolicy("ProductManagement",  p => p.RequireClaim(featureClaimType, "PRODUCT_MANAGEMENT"));
 });
 
 // Enriches every authenticated request's ClaimsPrincipal with feature claims from DB
@@ -69,8 +67,6 @@ builder.Services.AddScoped<IClaimsTransformation, FeatureClaimsTransformation>()
 
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
-builder.Services.AddScoped<ICategoryService, CategoryService>();
-builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
 
 builder.Services.AddCors(options =>
