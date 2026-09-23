@@ -48,6 +48,7 @@ public class MeController : ControllerBase
             email = user.Email,
             firstName = user.FirstName,
             lastName = user.LastName,
+            userType = user.UserType,
             roles,
             features
         });

@@ -22,14 +22,16 @@ public static class DbSeeder
         var featureMap = features.ToDictionary(f => f.Code);
 
         var adminRole = new Role { Id = Guid.NewGuid(), Name = "Admin", Description = "System administrator" };
-        await db.Roles.AddAsync(adminRole);
+        var myBdJobsRole = new Role { Id = Guid.NewGuid(), Name = "MyBdJobsUser", Description = "MyBdJobs job seeker user role" };
+        var corporateRole = new Role { Id = Guid.NewGuid(), Name = "CorporateUser", Description = "Corporate employer user role" };
+
+        await db.Roles.AddRangeAsync(adminRole, myBdJobsRole, corporateRole);
 
         db.RoleFeatures.AddRange(
             new RoleFeature { RoleId = adminRole.Id, FeatureId = featureMap["USER_MANAGEMENT"].Id },
             new RoleFeature { RoleId = adminRole.Id, FeatureId = featureMap["ROLE_MANAGEMENT"].Id }
         );
 
-        // Sync admin user to Keycloak, store the returned Keycloak ID
         const string adminPassword = "Admin@123";
         string? keycloakId = null;
         try
@@ -48,6 +50,7 @@ public static class DbSeeder
             Email = "admin@app.com",
             FirstName = "System",
             LastName = "Admin",
+            UserType = "admin",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
             KeycloakId = keycloakId,
             IsActive = true

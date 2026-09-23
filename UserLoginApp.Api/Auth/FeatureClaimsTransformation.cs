@@ -31,16 +31,29 @@ public class FeatureClaimsTransformation : IClaimsTransformation
             .FirstOrDefaultAsync(u => (u.KeycloakId == keycloakId || (!string.IsNullOrEmpty(preferredUsername) && u.Username == preferredUsername)) && u.IsActive);
 
         if (user == null)
-            return principal;
+        {
+            var email = principal.FindFirst("email")?.Value ?? $"{preferredUsername ?? keycloakId}@keycloak.local";
+            var userType = principal.FindFirst("userType")?.Value ?? "mybdjobs";
 
-        // Auto-link KeycloakId if it was not stored during seeder/creation
-        if (!string.IsNullOrEmpty(keycloakId) && user.KeycloakId != keycloakId)
+            user = new Models.Entities.User
+            {
+                Username = preferredUsername ?? keycloakId ?? Guid.NewGuid().ToString(),
+                Email = email,
+                KeycloakId = keycloakId,
+                UserType = userType,
+                IsActive = true
+            };
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+        }
+        else if (!string.IsNullOrEmpty(keycloakId) && user.KeycloakId != keycloakId)
         {
             user.KeycloakId = keycloakId;
             await _db.SaveChangesAsync();
         }
 
         var identity = new ClaimsIdentity();
+        identity.AddClaim(new Claim("userType", user.UserType));
 
         var features = user.UserRoles
             .SelectMany(ur => ur.Role.RoleFeatures)

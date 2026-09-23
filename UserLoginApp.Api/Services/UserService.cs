@@ -47,12 +47,13 @@ public class UserService : IUserService
     public async Task<UserResponse> CreateAsync(CreateUserRequest request)
     {
         string? keycloakId = null;
+        var userType = string.Equals(request.UserType, "corporate", StringComparison.OrdinalIgnoreCase) ? "corporate" : "mybdjobs";
         try
         {
             keycloakId = await _keycloak.CreateUserAsync(
                 request.Username, request.Email,
                 request.FirstName, request.LastName,
-                request.Password);
+                request.Password, userType);
         }
         catch (Exception ex)
         {
@@ -65,6 +66,7 @@ public class UserService : IUserService
             Email = request.Email,
             FirstName = request.FirstName,
             LastName = request.LastName,
+            UserType = userType,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             KeycloakId = keycloakId
         };
@@ -183,6 +185,7 @@ public class UserService : IUserService
         Email = u.Email,
         FirstName = u.FirstName,
         LastName = u.LastName,
+        UserType = u.UserType,
         IsActive = u.IsActive,
         CreatedAt = u.CreatedAt,
         Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList()

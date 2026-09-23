@@ -6,7 +6,7 @@ namespace UserLoginApp.Api.Services;
 
 public interface IKeycloakAdminService
 {
-    Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password);
+    Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password, string userType = "mybdjobs");
     Task UpdateUserAsync(string keycloakId, string email, string firstName, string lastName);
     Task SetEnabledAsync(string keycloakId, bool enabled);
     Task DeleteUserAsync(string keycloakId);
@@ -78,7 +78,7 @@ public class KeycloakAdminService : IKeycloakAdminService
         return null;
     }
 
-    public async Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password)
+    public async Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password, string userType = "mybdjobs")
     {
         try
         {
@@ -91,6 +91,10 @@ public class KeycloakAdminService : IKeycloakAdminService
                 firstName,
                 lastName,
                 enabled = true,
+                attributes = new Dictionary<string, string[]>
+                {
+                    ["userType"] = new[] { string.IsNullOrWhiteSpace(userType) ? "mybdjobs" : userType }
+                },
                 credentials = new[]
                 {
                     new { type = "password", value = password, temporary = false }
