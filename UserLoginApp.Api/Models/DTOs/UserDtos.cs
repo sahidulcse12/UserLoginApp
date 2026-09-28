@@ -7,7 +7,7 @@ public class CreateUserRequest
     public string Password { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
-    public string UserType { get; set; } = "mybdjobs"; // "mybdjobs" or "corporate"
+    public string UserType { get; set; } = "mybdjobs"; // "corporate", "mybdjobs", or "mis"
 }
 
 public class UpdateUserRequest
@@ -15,6 +15,7 @@ public class UpdateUserRequest
     public string Email { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
+    public string? UserType { get; set; } // optional userType change ("corporate", "mybdjobs", or "mis")
     public string? NewPassword { get; set; }
 }
 

@@ -24,8 +24,9 @@ public static class DbSeeder
         var adminRole = new Role { Id = Guid.NewGuid(), Name = "Admin", Description = "System administrator" };
         var myBdJobsRole = new Role { Id = Guid.NewGuid(), Name = "MyBdJobsUser", Description = "MyBdJobs job seeker user role" };
         var corporateRole = new Role { Id = Guid.NewGuid(), Name = "CorporateUser", Description = "Corporate employer user role" };
+        var misRole = new Role { Id = Guid.NewGuid(), Name = "MISUser", Description = "MIS management user role" };
 
-        await db.Roles.AddRangeAsync(adminRole, myBdJobsRole, corporateRole);
+        await db.Roles.AddRangeAsync(adminRole, myBdJobsRole, corporateRole, misRole);
 
         db.RoleFeatures.AddRange(
             new RoleFeature { RoleId = adminRole.Id, FeatureId = featureMap["USER_MANAGEMENT"].Id },

@@ -47,7 +47,13 @@ public class UserService : IUserService
     public async Task<UserResponse> CreateAsync(CreateUserRequest request)
     {
         string? keycloakId = null;
-        var userType = string.Equals(request.UserType, "corporate", StringComparison.OrdinalIgnoreCase) ? "corporate" : "mybdjobs";
+        var userType = (request.UserType ?? "").Trim().ToLower() switch
+        {
+            "corporate" => "corporate",
+            "mis" => "mis",
+            _ => "mybdjobs"
+        };
+
         try
         {
             keycloakId = await _keycloak.CreateUserAsync(
@@ -82,12 +88,21 @@ public class UserService : IUserService
             .FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return null;
 
+        var newUserType = !string.IsNullOrWhiteSpace(request.UserType)
+            ? (request.UserType.Trim().ToLower() switch
+              {
+                  "corporate" => "corporate",
+                  "mis" => "mis",
+                  _ => "mybdjobs"
+              })
+            : user.UserType;
+
         // Sync to Keycloak if linked
         if (!string.IsNullOrEmpty(user.KeycloakId))
         {
             try
             {
-                await _keycloak.UpdateUserAsync(user.KeycloakId, request.Email, request.FirstName, request.LastName);
+                await _keycloak.UpdateUserAsync(user.KeycloakId, request.Email, request.FirstName, request.LastName, newUserType);
 
                 if (!string.IsNullOrWhiteSpace(request.NewPassword))
                     await _keycloak.ResetPasswordAsync(user.KeycloakId, request.NewPassword);
@@ -101,6 +116,7 @@ public class UserService : IUserService
         user.Email = request.Email;
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
+        user.UserType = newUserType;
         user.UpdatedAt = DateTime.UtcNow;
 
         if (!string.IsNullOrWhiteSpace(request.NewPassword))

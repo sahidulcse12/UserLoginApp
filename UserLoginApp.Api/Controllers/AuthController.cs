@@ -20,10 +20,6 @@ public class AuthController : ControllerBase
         _keycloakAdminService = keycloakAdminService;
     }
 
-    /// <summary>
-    /// Registers a user both in Keycloak (setting userType attribute) and syncs to local AppDbContext.
-    /// User types allowed: 'mybdjobs' or 'corporate'
-    /// </summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -31,14 +27,14 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Username and Password are required." });
 
         var normalizedType = (request.UserType ?? "").Trim().ToLower();
-        if (normalizedType != "mybdjobs" && normalizedType != "corporate")
-            return BadRequest(new { message = "Invalid UserType. Allowed values are 'mybdjobs' or 'corporate'." });
+        if (normalizedType != "corporate" && normalizedType != "mybdjobs" && normalizedType != "mis")
+            return BadRequest(new { message = "Invalid UserType. Allowed values are 'corporate', 'mybdjobs', or 'mis'." });
 
         var localExists = await _db.Users.AnyAsync(u => u.Username == request.Username || u.Email == request.Email);
         if (localExists)
             return Conflict(new { message = "User with this username or email already exists in local database." });
 
-        // 1. Create User in Keycloak with userType attribute
+        // 1. Create User in Keycloak with userType attribute and add to correct Keycloak Group
         string? keycloakId = null;
         try
         {
@@ -72,8 +68,13 @@ public class AuthController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        // Assign default role (MyBdJobsUser or CorporateUser)
-        var defaultRoleName = normalizedType == "corporate" ? "CorporateUser" : "MyBdJobsUser";
+        // Assign default local role (CorporateUser, MISUser, or MyBdJobsUser)
+        var defaultRoleName = normalizedType switch
+        {
+            "corporate" => "CorporateUser",
+            "mis" => "MISUser",
+            _ => "MyBdJobsUser"
+        };
         var defaultRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == defaultRoleName || r.Name == "User");
         if (defaultRole != null)
         {

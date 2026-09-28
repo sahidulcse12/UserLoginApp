@@ -7,7 +7,7 @@ public class RegisterRequest
     public string Password { get; set; } = string.Empty;
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
-    public string UserType { get; set; } = "mybdjobs"; // "mybdjobs" or "corporate"
+    public string UserType { get; set; } = "mybdjobs"; // "corporate", "mybdjobs", or "mis"
 }
 
 public class LoginRequest
