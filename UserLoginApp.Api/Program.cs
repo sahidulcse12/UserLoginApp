@@ -67,7 +67,6 @@ builder.Services.AddAuthorization(options =>
 // Enriches every authenticated request's ClaimsPrincipal with feature claims from DB
 builder.Services.AddScoped<IClaimsTransformation, FeatureClaimsTransformation>();
 
-builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();

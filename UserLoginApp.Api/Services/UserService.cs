@@ -97,22 +97,6 @@ public class UserService : IUserService
               })
             : user.UserType;
 
-        // Sync to Keycloak if linked
-        if (!string.IsNullOrEmpty(user.KeycloakId))
-        {
-            try
-            {
-                await _keycloak.UpdateUserAsync(user.KeycloakId, request.Email, request.FirstName, request.LastName, newUserType);
-
-                if (!string.IsNullOrWhiteSpace(request.NewPassword))
-                    await _keycloak.ResetPasswordAsync(user.KeycloakId, request.NewPassword);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[UserService] Keycloak update warning: {ex.Message}");
-            }
-        }
-
         user.Email = request.Email;
         user.FirstName = request.FirstName;
         user.LastName = request.LastName;
@@ -131,18 +115,6 @@ public class UserService : IUserService
         var user = await _db.Users.FindAsync(id);
         if (user == null) return false;
 
-        if (!string.IsNullOrEmpty(user.KeycloakId))
-        {
-            try
-            {
-                await _keycloak.DeleteUserAsync(user.KeycloakId);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[UserService] Keycloak delete warning: {ex.Message}");
-            }
-        }
-
         _db.Users.Remove(user);
         await _db.SaveChangesAsync();
         return true;
@@ -152,18 +124,6 @@ public class UserService : IUserService
     {
         var user = await _db.Users.FindAsync(id);
         if (user == null) return false;
-
-        if (!string.IsNullOrEmpty(user.KeycloakId))
-        {
-            try
-            {
-                await _keycloak.SetEnabledAsync(user.KeycloakId, isActive);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[UserService] Keycloak SetActive warning: {ex.Message}");
-            }
-        }
 
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;

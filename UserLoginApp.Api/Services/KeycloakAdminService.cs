@@ -7,12 +7,7 @@ namespace UserLoginApp.Api.Services;
 public interface IKeycloakAdminService
 {
     Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password, string userType = "mybdjobs");
-    Task UpdateUserAsync(string keycloakId, string email, string firstName, string lastName, string? userType = null);
-    Task SetEnabledAsync(string keycloakId, bool enabled);
-    Task DeleteUserAsync(string keycloakId);
-    Task ResetPasswordAsync(string keycloakId, string newPassword);
     Task AddUserToGroupAsync(string keycloakUserId, string groupName);
-    Task RemoveUserFromGroupAsync(string keycloakUserId, string groupName);
     Task<string?> EnsureGroupExistsAndGetIdAsync(string groupName);
 }
 
@@ -32,6 +27,8 @@ public class KeycloakAdminService : IKeycloakAdminService
     private string AdminRealm => _config["Keycloak:AdminRealm"] ?? "master";
     private string AdminUsername => _config["Keycloak:AdminUsername"]!;
     private string AdminPassword => _config["Keycloak:AdminPassword"]!;
+    private string ClientId => _config["Keycloak:ClientId"] ?? "user-login-keycloak";
+    private string ClientSecret => _config["Keycloak:ClientSecret"] ?? "";
 
     public static string GetGroupNameForUserType(string userType)
     {
@@ -46,8 +43,40 @@ public class KeycloakAdminService : IKeycloakAdminService
     private async Task<string> GetAdminTokenAsync()
     {
         using var client = new HttpClient();
+        var errors = new List<string>();
 
-        // 1. Try AdminRealm ("master") first
+        // 1. Primary Method: Client Credentials Flow (Service Account) on Target Realm
+        if (!string.IsNullOrEmpty(ClientSecret))
+        {
+            var tokenUrlClientCreds = $"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token";
+            var formClientCreds = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = ClientId,
+                ["client_secret"] = ClientSecret
+            });
+
+            try
+            {
+                var responseClientCreds = await client.PostAsync(tokenUrlClientCreds, formClientCreds);
+                if (responseClientCreds.IsSuccessStatusCode)
+                {
+                    var json = await responseClientCreds.Content.ReadFromJsonAsync<JsonElement>();
+                    if (json.TryGetProperty("access_token", out var tokenProp))
+                    {
+                        return tokenProp.GetString()!;
+                    }
+                }
+                var err = await responseClientCreds.Content.ReadAsStringAsync();
+                errors.Add($"Client Credentials ({tokenUrlClientCreds}): HTTP {(int)responseClientCreds.StatusCode} - {err}");
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"Client Credentials exception: {ex.Message}");
+            }
+        }
+
+        // 2. Secondary Method: Master Realm Password Grant (admin-cli)
         var tokenUrlMaster = $"{BaseUrl}/realms/{AdminRealm}/protocol/openid-connect/token";
         var formMaster = new FormUrlEncodedContent(new Dictionary<string, string>
         {
@@ -57,56 +86,58 @@ public class KeycloakAdminService : IKeycloakAdminService
             ["password"] = AdminPassword
         });
 
-        var responseMaster = await client.PostAsync(tokenUrlMaster, formMaster);
-        if (responseMaster.IsSuccessStatusCode)
+        try
         {
-            var json = await responseMaster.Content.ReadFromJsonAsync<JsonElement>();
-            return json.GetProperty("access_token").GetString()!;
+            var responseMaster = await client.PostAsync(tokenUrlMaster, formMaster);
+            if (responseMaster.IsSuccessStatusCode)
+            {
+                var json = await responseMaster.Content.ReadFromJsonAsync<JsonElement>();
+                return json.GetProperty("access_token").GetString()!;
+            }
+            var masterErr = await responseMaster.Content.ReadAsStringAsync();
+            errors.Add($"Master Realm Password Grant ({tokenUrlMaster}): HTTP {(int)responseMaster.StatusCode} - {masterErr}");
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Master Realm exception: {ex.Message}");
         }
 
-        var masterErr = await responseMaster.Content.ReadAsStringAsync();
-
-        // 2. Fallback: Try target Realm if bdjadmin is created inside target Realm
+        // 3. Fallback: Target Realm Password Grant with Client Credentials
         if (!string.Equals(AdminRealm, Realm, StringComparison.OrdinalIgnoreCase))
         {
             var tokenUrlRealm = $"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token";
-            var formRealm = new FormUrlEncodedContent(new Dictionary<string, string>
+            var formRealmDict = new Dictionary<string, string>
             {
                 ["grant_type"] = "password",
-                ["client_id"] = _config["Keycloak:ClientId"] ?? "admin-cli",
+                ["client_id"] = ClientId,
                 ["username"] = AdminUsername,
                 ["password"] = AdminPassword
-            });
-
-            var responseRealm = await client.PostAsync(tokenUrlRealm, formRealm);
-            if (responseRealm.IsSuccessStatusCode)
+            };
+            if (!string.IsNullOrEmpty(ClientSecret))
             {
-                var jsonRealm = await responseRealm.Content.ReadFromJsonAsync<JsonElement>();
-                return jsonRealm.GetProperty("access_token").GetString()!;
+                formRealmDict["client_secret"] = ClientSecret;
             }
 
-            // Also try with admin-cli on target realm
-            var formRealmAdminCli = new FormUrlEncodedContent(new Dictionary<string, string>
+            try
             {
-                ["grant_type"] = "password",
-                ["client_id"] = "admin-cli",
-                ["username"] = AdminUsername,
-                ["password"] = AdminPassword
-            });
-            var responseRealmAdminCli = await client.PostAsync(tokenUrlRealm, formRealmAdminCli);
-            if (responseRealmAdminCli.IsSuccessStatusCode)
+                var responseRealm = await client.PostAsync(tokenUrlRealm, new FormUrlEncodedContent(formRealmDict));
+                if (responseRealm.IsSuccessStatusCode)
+                {
+                    var jsonRealm = await responseRealm.Content.ReadFromJsonAsync<JsonElement>();
+                    return jsonRealm.GetProperty("access_token").GetString()!;
+                }
+                var realmErr = await responseRealm.Content.ReadAsStringAsync();
+                errors.Add($"Target Realm Password Grant ({tokenUrlRealm}): HTTP {(int)responseRealm.StatusCode} - {realmErr}");
+            }
+            catch (Exception ex)
             {
-                var jsonRealmAdminCli = await responseRealmAdminCli.Content.ReadFromJsonAsync<JsonElement>();
-                return jsonRealmAdminCli.GetProperty("access_token").GetString()!;
+                errors.Add($"Target Realm exception: {ex.Message}");
             }
         }
 
         throw new InvalidOperationException(
-            $"Failed to obtain Keycloak Admin Token for user '{AdminUsername}' from '{BaseUrl}'. " +
-            $"Master Realm Token URL ({tokenUrlMaster}) returned: {masterErr}. " +
-            $"Please verify: 1. Is Keycloak BaseUrl '{BaseUrl}' correct or should it be 'https://auth.bdjobs.com'? " +
-            $"2. Is user '{AdminUsername}' created in 'master' realm or '{Realm}' realm? " +
-            $"3. Is the password '{AdminPassword}' correct for '{AdminUsername}'?");
+            $"Failed to obtain Keycloak Admin Token for client '{ClientId}' / user '{AdminUsername}' from '{BaseUrl}'. " +
+            $"Details: {string.Join(" | ", errors)}");
     }
 
     private async Task<HttpClient> AuthorizedClientAsync()
@@ -145,7 +176,6 @@ public class KeycloakAdminService : IKeycloakAdminService
         {
             var client = await AuthorizedClientAsync();
             
-            // 1. Check if group already exists
             var response = await client.GetAsync($"{BaseUrl}/admin/realms/{Realm}/groups?search={Uri.EscapeDataString(groupName)}");
             if (response.IsSuccessStatusCode)
             {
@@ -162,7 +192,6 @@ public class KeycloakAdminService : IKeycloakAdminService
                 }
             }
 
-            // 2. If group does not exist, create it
             var groupBody = new { name = groupName };
             var content = new StringContent(JsonSerializer.Serialize(groupBody), Encoding.UTF8, "application/json");
             var createResponse = await client.PostAsync($"{BaseUrl}/admin/realms/{Realm}/groups", content);
@@ -175,7 +204,6 @@ public class KeycloakAdminService : IKeycloakAdminService
                     return location.Split('/').Last();
                 }
 
-                // Re-query to fetch ID
                 var retryResponse = await client.GetAsync($"{BaseUrl}/admin/realms/{Realm}/groups?search={Uri.EscapeDataString(groupName)}");
                 if (retryResponse.IsSuccessStatusCode)
                 {
@@ -224,26 +252,6 @@ public class KeycloakAdminService : IKeycloakAdminService
         }
     }
 
-    public async Task RemoveUserFromGroupAsync(string keycloakUserId, string groupName)
-    {
-        try
-        {
-            var groupId = await EnsureGroupExistsAndGetIdAsync(groupName);
-            if (string.IsNullOrEmpty(groupId)) return;
-
-            var client = await AuthorizedClientAsync();
-            var response = await client.DeleteAsync($"{BaseUrl}/admin/realms/{Realm}/users/{keycloakUserId}/groups/{groupId}");
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Failed to remove user {UserId} from group {GroupName} (Status: {Status})", keycloakUserId, groupName, response.StatusCode);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error removing user {UserId} from group {GroupName} in Keycloak", keycloakUserId, groupName);
-        }
-    }
-
     public async Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password, string userType = "mybdjobs")
     {
         try
@@ -288,7 +296,7 @@ public class KeycloakAdminService : IKeycloakAdminService
             {
                 var errDetails = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Keycloak User Creation Failed. URL: {Url}, Status: {Status}, Details: {Details}", userEndpointUrl, response.StatusCode, errDetails);
-                throw new InvalidOperationException($"Keycloak API call to '{userEndpointUrl}' failed with HTTP {response.StatusCode} ({(int)response.StatusCode}). Please verify that Realm '{Realm}' exists in Keycloak (casing matters) and Keycloak is running at '{BaseUrl}'. Details: {errDetails}");
+                throw new InvalidOperationException($"Keycloak API call to '{userEndpointUrl}' failed with HTTP {response.StatusCode}. Details: {errDetails}");
             }
             else
             {
@@ -307,110 +315,6 @@ public class KeycloakAdminService : IKeycloakAdminService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create user {Username} in Keycloak", username);
-            throw new InvalidOperationException($"Keycloak sync failed: {ex.Message}", ex);
-        }
-    }
-
-    public async Task UpdateUserAsync(string keycloakId, string email, string firstName, string lastName, string? userType = null)
-    {
-        try
-        {
-            var client = await AuthorizedClientAsync();
-
-            var bodyDict = new Dictionary<string, object>
-            {
-                ["email"] = email,
-                ["firstName"] = firstName,
-                ["lastName"] = lastName
-            };
-
-            if (!string.IsNullOrWhiteSpace(userType))
-            {
-                var normalizedUserType = userType.Trim().ToLower() switch
-                {
-                    "corporate" => "corporate",
-                    "mis" => "mis",
-                    _ => "mybdjobs"
-                };
-
-                bodyDict["attributes"] = new Dictionary<string, string[]>
-                {
-                    ["userType"] = new[] { normalizedUserType }
-                };
-
-                // Manage group memberships if userType changed
-                var newGroupName = GetGroupNameForUserType(normalizedUserType);
-                var knownGroups = new[] { "Corporate-Users", "MyBdjobs-Users", "MIS-Users" };
-
-                foreach (var oldGroup in knownGroups)
-                {
-                    if (!string.Equals(oldGroup, newGroupName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        await RemoveUserFromGroupAsync(keycloakId, oldGroup);
-                    }
-                }
-                await AddUserToGroupAsync(keycloakId, newGroupName);
-            }
-
-            var content = new StringContent(JsonSerializer.Serialize(bodyDict), Encoding.UTF8, "application/json");
-            var response = await client.PutAsync($"{BaseUrl}/admin/realms/{Realm}/users/{keycloakId}", content);
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to update user {KeycloakId} in Keycloak", keycloakId);
-            throw new InvalidOperationException($"Keycloak sync failed: {ex.Message}", ex);
-        }
-    }
-
-    public async Task SetEnabledAsync(string keycloakId, bool enabled)
-    {
-        try
-        {
-            var client = await AuthorizedClientAsync();
-
-            var body = new { enabled };
-            var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            var response = await client.PutAsync($"{BaseUrl}/admin/realms/{Realm}/users/{keycloakId}", content);
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to set enabled={Enabled} for user {KeycloakId} in Keycloak", enabled, keycloakId);
-            throw new InvalidOperationException($"Keycloak sync failed: {ex.Message}", ex);
-        }
-    }
-
-    public async Task DeleteUserAsync(string keycloakId)
-    {
-        try
-        {
-            var client = await AuthorizedClientAsync();
-            var response = await client.DeleteAsync($"{BaseUrl}/admin/realms/{Realm}/users/{keycloakId}");
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete user {KeycloakId} from Keycloak", keycloakId);
-            throw new InvalidOperationException($"Keycloak sync failed: {ex.Message}", ex);
-        }
-    }
-
-    public async Task ResetPasswordAsync(string keycloakId, string newPassword)
-    {
-        try
-        {
-            var client = await AuthorizedClientAsync();
-
-            var body = new { type = "password", value = newPassword, temporary = false };
-            var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            var response = await client.PutAsync(
-                $"{BaseUrl}/admin/realms/{Realm}/users/{keycloakId}/reset-password", content);
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to reset password for user {KeycloakId} in Keycloak", keycloakId);
             throw new InvalidOperationException($"Keycloak sync failed: {ex.Message}", ex);
         }
     }
