@@ -13,8 +13,6 @@ public interface IUserService
     Task<UserResponse?> UpdateAsync(Guid id, UpdateUserRequest request);
     Task<bool> DeleteAsync(Guid id);
     Task<bool> SetActiveAsync(Guid id, bool isActive);
-    Task<bool> AssignRoleAsync(Guid userId, Guid roleId);
-    Task<bool> RemoveRoleAsync(Guid userId, Guid roleId);
 }
 
 public class UserService : IUserService
@@ -31,7 +29,6 @@ public class UserService : IUserService
     public async Task<List<UserResponse>> GetAllAsync()
     {
         return await _db.Users
-            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .Select(u => MapToResponse(u))
             .ToListAsync();
     }
@@ -39,7 +36,6 @@ public class UserService : IUserService
     public async Task<UserResponse?> GetByIdAsync(Guid id)
     {
         var user = await _db.Users
-            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == id);
         return user == null ? null : MapToResponse(user);
     }
@@ -74,7 +70,10 @@ public class UserService : IUserService
             LastName = request.LastName,
             UserType = userType,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            KeycloakId = keycloakId
+            KeycloakId = keycloakId,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
@@ -84,7 +83,6 @@ public class UserService : IUserService
     public async Task<UserResponse?> UpdateAsync(Guid id, UpdateUserRequest request)
     {
         var user = await _db.Users
-            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return null;
 
@@ -131,29 +129,6 @@ public class UserService : IUserService
         return true;
     }
 
-    public async Task<bool> AssignRoleAsync(Guid userId, Guid roleId)
-    {
-        var exists = await _db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId);
-        if (exists) return true;
-
-        var userExists = await _db.Users.AnyAsync(u => u.Id == userId);
-        var roleExists = await _db.Roles.AnyAsync(r => r.Id == roleId);
-        if (!userExists || !roleExists) return false;
-
-        _db.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId });
-        await _db.SaveChangesAsync();
-        return true;
-    }
-
-    public async Task<bool> RemoveRoleAsync(Guid userId, Guid roleId)
-    {
-        var userRole = await _db.UserRoles.FindAsync(userId, roleId);
-        if (userRole == null) return false;
-        _db.UserRoles.Remove(userRole);
-        await _db.SaveChangesAsync();
-        return true;
-    }
-
     private static UserResponse MapToResponse(User u) => new()
     {
         Id = u.Id,
@@ -164,6 +139,6 @@ public class UserService : IUserService
         UserType = u.UserType,
         IsActive = u.IsActive,
         CreatedAt = u.CreatedAt,
-        Roles = u.UserRoles.Select(ur => ur.Role.Name).ToList()
+        Roles = new List<string>()
     };
 }

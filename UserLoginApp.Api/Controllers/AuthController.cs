@@ -34,7 +34,7 @@ public class AuthController : ControllerBase
         if (localExists)
             return Conflict(new { message = "User with this username or email already exists in local database." });
 
-        // 1. Create User in Keycloak with userType attribute and add to correct Keycloak Group
+        // 1. Create User in Keycloak with userType attribute and assign to Keycloak Group
         string? keycloakId = null;
         try
         {
@@ -52,7 +52,7 @@ public class AuthController : ControllerBase
             return StatusCode(500, new { message = $"Failed to register user in Keycloak: {ex.Message}" });
         }
 
-        // 2. Save/Sync User in Local AppDbContext
+        // 2. Save/Sync User in Local AppDbContext (kc.Users table)
         var user = new User
         {
             Username = request.Username,
@@ -62,25 +62,13 @@ public class AuthController : ControllerBase
             UserType = normalizedType,
             KeycloakId = keycloakId,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            IsActive = true
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
-
-        // Assign default local role (CorporateUser, MISUser, or MyBdJobsUser)
-        var defaultRoleName = normalizedType switch
-        {
-            "corporate" => "CorporateUser",
-            "mis" => "MISUser",
-            _ => "MyBdJobsUser"
-        };
-        var defaultRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == defaultRoleName || r.Name == "User");
-        if (defaultRole != null)
-        {
-            _db.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = defaultRole.Id });
-            await _db.SaveChangesAsync();
-        }
 
         return Ok(new
         {
@@ -93,5 +81,53 @@ public class AuthController : ControllerBase
             userType = user.UserType,
             message = "User registered in Keycloak and synced to local database successfully."
         });
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest(new { message = "Username and Password are required." });
+
+        // 1. Authenticate with Keycloak and retrieve Access & Refresh tokens
+        var tokenResponse = await _keycloakAdminService.LoginUserAsync(request.Username, request.Password);
+        if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
+            return Unauthorized(new { message = "Invalid credentials or Keycloak authentication failed." });
+
+        // 2. Fetch local user profile from database (kc.Users)
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username || u.Email == request.Username);
+        if (user != null)
+        {
+            user.RefreshToken = tokenResponse.RefreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            tokenResponse.User = new UserDto
+            {
+                Id = user.Id,
+                Username = user.Username,
+                Email = user.Email,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                UserType = user.UserType,
+                KeycloakId = user.KeycloakId
+            };
+        }
+
+        return Ok(tokenResponse);
+    }
+
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            return BadRequest(new { message = "RefreshToken is required." });
+
+        var tokenResponse = await _keycloakAdminService.RefreshTokenAsync(request.RefreshToken);
+        if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
+            return Unauthorized(new { message = "Invalid or expired refresh token." });
+
+        return Ok(tokenResponse);
     }
 }

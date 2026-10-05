@@ -13,8 +13,7 @@ public class FeatureClaimsTransformation : IClaimsTransformation
 
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
-        // Already enriched in this request cycle
-        if (principal.HasClaim(c => c.Type == "feature"))
+        if (principal.HasClaim(c => c.Type == "userType"))
             return principal;
 
         var keycloakId = principal.FindFirst("sub")?.Value;
@@ -24,10 +23,6 @@ public class FeatureClaimsTransformation : IClaimsTransformation
             return principal;
 
         var user = await _db.Users
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                    .ThenInclude(r => r.RoleFeatures)
-                        .ThenInclude(rf => rf.Feature)
             .FirstOrDefaultAsync(u => (u.KeycloakId == keycloakId || (!string.IsNullOrEmpty(preferredUsername) && u.Username == preferredUsername)) && u.IsActive);
 
         if (user == null)
@@ -41,7 +36,9 @@ public class FeatureClaimsTransformation : IClaimsTransformation
                 Email = email,
                 KeycloakId = keycloakId,
                 UserType = userType,
-                IsActive = true
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
             _db.Users.Add(user);
             await _db.SaveChangesAsync();
@@ -54,16 +51,8 @@ public class FeatureClaimsTransformation : IClaimsTransformation
 
         var identity = new ClaimsIdentity();
         identity.AddClaim(new Claim("userType", user.UserType));
-
-        var features = user.UserRoles
-            .SelectMany(ur => ur.Role.RoleFeatures)
-            .Select(rf => rf.Feature.Code)
-            .Distinct();
-
-        foreach (var feature in features)
-            identity.AddClaim(new Claim("feature", feature));
-
         principal.AddIdentity(identity);
+
         return principal;
     }
 }

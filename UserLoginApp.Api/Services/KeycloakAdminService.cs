@@ -2,6 +2,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+using UserLoginApp.Api.Models.DTOs;
+
 namespace UserLoginApp.Api.Services;
 
 public interface IKeycloakAdminService
@@ -9,6 +11,8 @@ public interface IKeycloakAdminService
     Task<string?> CreateUserAsync(string username, string email, string firstName, string lastName, string password, string userType = "mybdjobs");
     Task AddUserToGroupAsync(string keycloakUserId, string groupName);
     Task<string?> EnsureGroupExistsAndGetIdAsync(string groupName);
+    Task<TokenResponse?> LoginUserAsync(string username, string password);
+    Task<TokenResponse?> RefreshTokenAsync(string refreshToken);
 }
 
 public class KeycloakAdminService : IKeycloakAdminService
@@ -272,6 +276,7 @@ public class KeycloakAdminService : IKeycloakAdminService
                 firstName,
                 lastName,
                 enabled = true,
+                emailVerified = true,
                 attributes = new Dictionary<string, string[]>
                 {
                     ["userType"] = new[] { normalizedUserType }
@@ -316,6 +321,89 @@ public class KeycloakAdminService : IKeycloakAdminService
         {
             _logger.LogError(ex, "Failed to create user {Username} in Keycloak", username);
             throw new InvalidOperationException($"Keycloak sync failed: {ex.Message}", ex);
+        }
+    }
+
+    public async Task<TokenResponse?> LoginUserAsync(string username, string password)
+    {
+        using var client = new HttpClient();
+        var tokenUrl = $"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token";
+        var formDict = new Dictionary<string, string>
+        {
+            ["grant_type"] = "password",
+            ["client_id"] = ClientId,
+            ["username"] = username,
+            ["password"] = password
+        };
+        if (!string.IsNullOrEmpty(ClientSecret))
+        {
+            formDict["client_secret"] = ClientSecret;
+        }
+
+        try
+        {
+            var response = await client.PostAsync(tokenUrl, new FormUrlEncodedContent(formDict));
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Keycloak login failed for user '{Username}'. Status: {Status}, Error: {Error}", username, response.StatusCode, err);
+                return null;
+            }
+
+            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+            return new TokenResponse
+            {
+                AccessToken = json.GetProperty("access_token").GetString()!,
+                RefreshToken = json.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null,
+                ExpiresIn = json.GetProperty("expires_in").GetInt32(),
+                TokenType = json.TryGetProperty("token_type", out var tt) ? tt.GetString() ?? "Bearer" : "Bearer"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception while requesting login token from Keycloak for {Username}", username);
+            return null;
+        }
+    }
+
+    public async Task<TokenResponse?> RefreshTokenAsync(string refreshToken)
+    {
+        using var client = new HttpClient();
+        var tokenUrl = $"{BaseUrl}/realms/{Realm}/protocol/openid-connect/token";
+        var formDict = new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["client_id"] = ClientId,
+            ["refresh_token"] = refreshToken
+        };
+        if (!string.IsNullOrEmpty(ClientSecret))
+        {
+            formDict["client_secret"] = ClientSecret;
+        }
+
+        try
+        {
+            var response = await client.PostAsync(tokenUrl, new FormUrlEncodedContent(formDict));
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Keycloak refresh token failed. Status: {Status}, Error: {Error}", response.StatusCode, err);
+                return null;
+            }
+
+            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+            return new TokenResponse
+            {
+                AccessToken = json.GetProperty("access_token").GetString()!,
+                RefreshToken = json.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null,
+                ExpiresIn = json.GetProperty("expires_in").GetInt32(),
+                TokenType = json.TryGetProperty("token_type", out var tt) ? tt.GetString() ?? "Bearer" : "Bearer"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception while refreshing token with Keycloak");
+            return null;
         }
     }
 }

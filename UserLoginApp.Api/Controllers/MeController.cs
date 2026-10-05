@@ -24,33 +24,23 @@ public class MeController : ControllerBase
             return Unauthorized();
 
         var user = await _db.Users
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                    .ThenInclude(r => r.RoleFeatures)
-                        .ThenInclude(rf => rf.Feature)
             .FirstOrDefaultAsync(u => u.KeycloakId == keycloakId || (!string.IsNullOrEmpty(preferredUsername) && u.Username == preferredUsername));
 
         if (user == null)
             return NotFound(new { message = "User not found in application database." });
 
-        var features = user.UserRoles
-            .SelectMany(ur => ur.Role.RoleFeatures)
-            .Select(rf => rf.Feature.Code)
-            .Distinct()
-            .ToList();
-
-        var roles = user.UserRoles.Select(ur => ur.Role.Name).ToList();
-
         return Ok(new
         {
             id = user.Id,
+            keycloakId = user.KeycloakId,
             username = user.Username,
             email = user.Email,
             firstName = user.FirstName,
             lastName = user.LastName,
             userType = user.UserType,
-            roles,
-            features
+            isActive = user.IsActive,
+            createdAt = user.CreatedAt,
+            updatedAt = user.UpdatedAt
         });
     }
 }

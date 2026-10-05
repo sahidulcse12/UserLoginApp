@@ -56,13 +56,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Feature-based policies (features are enriched from app DB via IClaimsTransformation)
-const string featureClaimType = "feature";
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("UserManagement",     p => p.RequireClaim(featureClaimType, "USER_MANAGEMENT"));
-    options.AddPolicy("RoleManagement",     p => p.RequireClaim(featureClaimType, "ROLE_MANAGEMENT"));
-});
+builder.Services.AddAuthorization();
 
 // Enriches every authenticated request's ClaimsPrincipal with feature claims from DB
 builder.Services.AddScoped<IClaimsTransformation, FeatureClaimsTransformation>();
@@ -77,9 +71,13 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserLoginApp API v1"));
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserLoginApp API v1");
+    c.RoutePrefix = "swagger";
+});
 
-app.MapGet("/", () => Results.Redirect("/swagger"));
+app.MapGet("/", () => Results.Redirect("/swagger/index.html"));
 
 app.UseCors();
 app.UseAuthentication();

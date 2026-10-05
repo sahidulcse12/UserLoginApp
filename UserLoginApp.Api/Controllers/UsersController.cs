@@ -7,7 +7,7 @@ namespace UserLoginApp.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = "UserManagement")]
+[Authorize]
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -56,20 +56,6 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> Deactivate(Guid id)
     {
         var result = await _userService.SetActiveAsync(id, false);
-        return result ? NoContent() : NotFound();
-    }
-
-    [HttpPost("{id:guid}/roles")]
-    public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest request)
-    {
-        var result = await _userService.AssignRoleAsync(id, request.RoleId);
-        return result ? NoContent() : BadRequest();
-    }
-
-    [HttpDelete("{id:guid}/roles/{roleId:guid}")]
-    public async Task<IActionResult> RemoveRole(Guid id, Guid roleId)
-    {
-        var result = await _userService.RemoveRoleAsync(id, roleId);
         return result ? NoContent() : NotFound();
     }
 }
