@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using UserLoginApp.Api.Auth;
 using UserLoginApp.Api.Data;
+using UserLoginApp.Api.Data.Repositories;
 using UserLoginApp.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,6 +62,8 @@ builder.Services.AddAuthorization();
 // Enriches every authenticated request's ClaimsPrincipal with feature claims from DB
 builder.Services.AddScoped<IClaimsTransformation, FeatureClaimsTransformation>();
 
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
