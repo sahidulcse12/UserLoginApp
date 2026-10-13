@@ -38,6 +38,9 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Route after the prefix is stripped; otherwise /KeycloakLogin/api/... is matched before the rewrite and 404s
+app.UseRouting();
+
 // UseCors MUST be placed before UseSwagger so Swagger endpoints return CORS headers
 app.UseCors();
 
