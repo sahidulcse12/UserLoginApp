@@ -1,13 +1,18 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
 using UserLoginApp.Api.Auth;
 using UserLoginApp.Api.Data;
-using UserLoginApp.Api.Data.Repositories;
+using Microsoft.OpenApi.Models;
 using UserLoginApp.Api.Services;
+using UserLoginApp.Api.Models.DTOs;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using UserLoginApp.Api.Orchestrators;
+using UserLoginApp.Api.Core.Messaging;
+using UserLoginApp.Api.Subsystems.Auth;
+using UserLoginApp.Api.Subsystems.Roles;
+using UserLoginApp.Api.Data.Repositories;
+using Microsoft.AspNetCore.Authentication;
+using UserLoginApp.Api.Subsystems.DataSync;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,10 +67,26 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IClaimsTransformation, FeatureClaimsTransformation>();
 
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
+
+// ── In-Process ServiceBus / Dispatcher ──────────────────────────────────────
+builder.Services.AddScoped<IServiceBus, InMemoryServiceBus>();
+
+// ── Orchestrators ───────────────────────────────────────────────────────────
+builder.Services.AddScoped<IAuthOrchestrator, AuthOrchestrator>();
+builder.Services.AddScoped<IRoleOrchestrator, RoleOrchestrator>();
+
+// ── Subsystem Command Handlers ──────────────────────────────────────────────
+builder.Services.AddScoped<ICommandHandler<RegisterUserCommand, AuthResult<RegisterResponse>>, RegisterUserCommandHandler>();
+builder.Services.AddScoped<ICommandHandler<LoginUserCommand, AuthResult<TokenResponse>>, LoginUserCommandHandler>();
+builder.Services.AddScoped<ICommandHandler<RefreshTokenCommand, AuthResult<TokenResponse>>, RefreshTokenCommandHandler>();
+builder.Services.AddScoped<ICommandHandler<GetRolesCommand, List<RoleResponse>>, GetRolesCommandHandler>();
+builder.Services.AddScoped<ICommandHandler<GetRoleByIdCommand, RoleResponse?>, GetRoleByIdCommandHandler>();
+builder.Services.AddScoped<ICommandHandler<CreateRoleCommand, RoleResponse>, CreateRoleCommandHandler>();
+
+// ── DataSync / Event Handlers ───────────────────────────────────────────────
+builder.Services.AddScoped<IEventHandler<UserRegisteredEvent>, UserRegisteredDataSyncHandler>();
+builder.Services.AddScoped<IEventHandler<UserLoggedInEvent>, UserLoggedInDataSyncHandler>();
 
 var allowedOrigins = (builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? new[] { "http://localhost:4200", "https://gateway.bdjobs.com" })
@@ -119,7 +140,7 @@ app.UseSwagger(c =>
 
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/KeycloakLogin/swagger/v1/swagger.json", "UserLoginApp API v1");
+    c.SwaggerEndpoint("//swagger/v1/swagger.json", "UserLoginApp API v1");
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserLoginApp API v1 (Local)");
     c.RoutePrefix = "swagger";
 });
