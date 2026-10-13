@@ -5,7 +5,7 @@ Guidance for working in this repo. The architecture follows the BdjobsMIS **Auth
 ## Project at a glance
 
 - A .NET 8 backend (SDK pinned in `global.json` to 8.0.412; shared project settings live in `Directory.Build.props`). It handles user login and access control on top of **Keycloak** (`https://auth.bdjobs.com`, realm `UserLogin`). It uses EF Core 8 on SQL Server (`bdjEmails` DB, `kc` schema) and stores passwords with BCrypt.
-- **Hosts:** `AuthSubsystem.APIs` (http://localhost:5000) and `RolesSubsystem.APIs` (http://localhost:5002). Swagger is at `/swagger` on both.
+- **Host:** `AuthSubsystem.APIs` (http://localhost:5000, Swagger at `/swagger`). Only the Auth subsystem and what it depends on (Shared, DataSync) are in the solution right now; the Roles subsystem was removed and is in git history (commit `439838f`) if it is needed again.
 - The Auth host keeps `<AssemblyName>UserLoginApp.Api</AssemblyName>`, so the published DLL name and the existing deployment stay unchanged. It runs behind the gateway under the `/KeycloakLogin` path prefix; its `Program.cs` rewrites `PathBase` for that and honours forwarded headers.
 - **KeycloakTheme/**: a custom Keycloak login theme.
 - **UserLoginApp.Web**: build output only, with no source.
@@ -14,7 +14,6 @@ Commands (run from the repo root):
 ```
 dotnet build UserLoginApp.sln
 dotnet run --project AuthSubsystem/AuthSubsystem.APIs     # :5000
-dotnet run --project RolesSubsystem/RolesSubsystem.APIs   # :5002
 dotnet tool restore                                       # dotnet-ef, from .config/dotnet-tools.json
 dotnet ef migrations add <Name> --project AuthSubsystem/AuthSubsystem.Repositories --startup-project AuthSubsystem/AuthSubsystem.APIs
 ```
@@ -31,7 +30,7 @@ The Auth `Program.cs` runs `DbSeeder.SeedAsync` on startup. It is currently a no
 - **Repositories take and return entities.** Handlers map from DTOs/commands to entities before they call a repository.
 
 ### Five layers per subsystem (required)
-Every subsystem (`Auth`, `Roles`, `DataSync`, and any new one) is split into **five projects**. A project may reference only the projects listed on its line, and that is enforced by `ProjectReference`, not by convention:
+Every subsystem (`Auth`, `DataSync`, and any new one) is split into **five projects**. A project may reference only the projects listed on its line, and that is enforced by `ProjectReference`, not by convention:
 
 ```
 <X>Subsystem/
@@ -45,18 +44,18 @@ A layer with nothing in it yet still gets its project; DataSync's DTOs, Aggregat
 
 | Layer | Contains | Examples in this repo |
 |---|---|---|
-| **DTOs** | Commands, subsystem-internal events, request/response DTOs, settings POCOs | `Commands/AuthCommands.cs`, `AuthDtos.cs` (`LoginRequest`, `TokenResponse`, `AuthResult<T>`), `Commands/RoleCommands.cs` (+ `RoleCreatedEvent`) |
-| **Aggregators** | Entities (`Entities/`); later AutoMapper `Profile`s | Auth: `Entities/User`. Roles: `Entities/Role`, `Feature`, `RoleFeature`, `UserRole` |
-| **Repositories** | `Data/*DbContext`, `Migrations/`, `Abstractions/I*Repository`, implementations | `AppDbContext`, `IAuthRepository`/`AuthRepository`; `IRoleRepository`/`RoleRepository` (in-memory defaults, no role tables yet) |
-| **Handlers** | One folder per feature (`<Feature>/*Handler.cs`), external-service clients, claims transformation, seeding; later `Validators/` | `Login/`, `Register/`, `RefreshToken/`, `Keycloak/`, `Claims/FeatureClaimsTransformation`, `Seeding/DbSeeder`; Roles: `GetRoles/`, `GetRoleById/`, `CreateRole/` |
-| **APIs** | `Program.cs` (hosts), `Extensions/ServiceCollectionExtensions.cs`, thin `Controllers/` | `AuthController`, `RolesController`; `DataSyncSubsystem.APIs` is a class library holding only `AddDataSyncSubsystem()` |
+| **DTOs** | Commands, subsystem-internal events, request/response DTOs, settings POCOs | `Commands/AuthCommands.cs`, `AuthDtos.cs` (`LoginRequest`, `TokenResponse`, `AuthResult<T>`) |
+| **Aggregators** | Entities (`Entities/`); later AutoMapper `Profile`s | `Entities/User` |
+| **Repositories** | `Data/*DbContext`, `Migrations/`, `Abstractions/I*Repository`, implementations | `AppDbContext`, `IAuthRepository`/`AuthRepository` |
+| **Handlers** | One folder per feature (`<Feature>/*Handler.cs`), external-service clients, claims transformation, seeding; later `Validators/` | `Login/`, `Register/`, `RefreshToken/`, `Keycloak/`, `Claims/FeatureClaimsTransformation`, `Seeding/DbSeeder` |
+| **APIs** | `Program.cs` (hosts), `Extensions/ServiceCollectionExtensions.cs`, thin `Controllers/` | `AuthController`; `DataSyncSubsystem.APIs` is a class library holding only `AddDataSyncSubsystem()` |
 
 Shared infrastructure (`Shared/`), which every subsystem may reference:
 - **SharedSubsystem.DTOs**: marker interfaces `ICommand<TResult>` and `IEvent`, plus `IntegrationEvents/` for events that cross subsystems.
 - **SharedSubsystem.Handlers**: `ICommandHandler<,>`, `IEventHandler<>` and the `IServiceBus` interface. The interface sits here so that handlers can broadcast events.
 - **ServiceBus.Handlers**: `InMemoryServiceBus` and `AddServiceBus()`.
 
-Entities never cross subsystems. For example, `UserRole` holds only a `UserId`, with no navigation to Auth's `User`.
+Entities never cross subsystems: another subsystem refers to an Auth user by its `Guid` id only, never through a navigation to `User`.
 
 Conventions:
 - The DbContext uses Fluent configuration: `OnModelCreating` calls a private `Configure<Entity>(EntityTypeBuilder<T>)` for each entity.
@@ -68,7 +67,7 @@ Conventions:
 ### Adding a feature
 Work from the bottom layer up:
 1. **DTOs:** add `record XCommand(...) : ICommand<TResult>` and the request/response DTOs. A `record XEvent(..., DateTime OccurredOn) : IEvent` goes here if only this subsystem uses it, or in `SharedSubsystem.DTOs/IntegrationEvents` if another subsystem handles it.
-2. **Aggregators:** add or extend the entity, and add the DTO ↔ entity mapping. For now mapping is manual and lives in the Handlers project (for example `RoleMapping.ToResponse`); it moves to an AutoMapper `Profile` once AutoMapper is added.
+2. **Aggregators:** add or extend the entity, and add the DTO ↔ entity mapping. For now mapping is manual and lives in the Handlers project (for example the entity → `UserDto` mapping in `LoginUserCommandHandler`); it moves to an AutoMapper `Profile` once AutoMapper is added.
 3. **Repositories:** add the method to `I<X>Repository` and its implementation. It takes and returns entities. Add a migration if the schema changes.
 4. **Handlers:** add `<Feature>/XCommandHandler : ICommandHandler<XCommand, TResult>`. Validate first (inline checks for now, `Validators/` once FluentValidation is added), then map to entities, call the repositories and services, broadcast events, and return the result.
 5. **APIs:** add a controller action that dispatches through `IServiceBus`. Register the handler in `Extensions/ServiceCollectionExtensions.cs` with `AddScoped<ICommandHandler<XCommand, TResult>, XCommandHandler>()`, and do the same for each `IEventHandler<>`. Registration is manual, and the bus throws `InvalidOperationException` if a handler is missing.
@@ -85,7 +84,7 @@ Work from the bottom layer up:
   2. If that fails, fall back to a **legacy `dbo.ADMIN` migration**: provision the user in Keycloak as `mis`, upsert the local `User` with a BCrypt hash, then log in again. If the login fails because of required actions, clear them and retry once.
   3. Store the refresh token on the local user and broadcast `UserLoggedInEvent`.
 - **Register** accepts the user types `corporate`, `mybdjobs` and `mis`. The user is created in Keycloak first, then persisted locally, then `UserRegisteredEvent` is broadcast.
-- **Authorization data:** the live DB currently has only `kc.Users`. The Role, Feature, RoleFeature and UserRole entities exist in `RolesSubsystem.Aggregators`, but no tables back them yet; `RoleRepository` serves three default roles from memory. `FeatureClaimsTransformation` resolves the user by `sub` or `preferred_username` (creating them on first sight) and adds a `userType` claim.
+- **Authorization data:** the live DB currently has only `kc.Users`; there are no role or feature tables yet. `FeatureClaimsTransformation` resolves the user by `sub` or `preferred_username` (creating them on first sight) and adds a `userType` claim.
 - When doing module/feature checks, match **exact IDs**. Never use substring `Contains` on a delimited claim string, because `"5"` would match `"57"`.
 
 ## Testing pattern
