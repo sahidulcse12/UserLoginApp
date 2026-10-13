@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
 using AuthSubsystem.DTOs;
+using Microsoft.AspNetCore.Mvc;
 using AuthSubsystem.DTOs.Commands;
 using SharedSubsystem.Handlers.Abstractions;
 

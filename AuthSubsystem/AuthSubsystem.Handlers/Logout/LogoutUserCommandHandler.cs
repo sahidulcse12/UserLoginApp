@@ -40,11 +40,11 @@ public class LogoutUserCommandHandler : ICommandHandler<LogoutUserCommand, AuthR
     {
         var request = command.Request;
 
-        // 1. Validate Aggregates & Apply Business Rules
+        // Validate Aggregates & Apply Business Rules
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
             return AuthResult<LogoutResponse>.Fail(400, "RefreshToken is required.");
 
-        // 2. End the Keycloak session (Keycloak validates the refresh token here)
+        // End the Keycloak session (Keycloak validates the refresh token here)
         var loggedOut = await _keycloak.LogoutAsync(request.RefreshToken);
         if (!loggedOut)
             return AuthResult<LogoutResponse>.Fail(401, "Invalid or expired refresh token.");
@@ -52,7 +52,7 @@ public class LogoutUserCommandHandler : ICommandHandler<LogoutUserCommand, AuthR
         // Safe to read without validation: Keycloak has just accepted this token
         var claims = KeycloakTokenReader.TryReadClaims(request.RefreshToken);
 
-        // 3. Revoke the session so its unexpired access tokens are rejected by this API immediately
+        // Revoke the session so its unexpired access tokens are rejected by this API immediately
         if (!string.IsNullOrEmpty(claims?.SessionId))
         {
             var minUntil = DateTimeOffset.UtcNow.Add(MinRevocationWindow);
@@ -64,7 +64,7 @@ public class LogoutUserCommandHandler : ICommandHandler<LogoutUserCommand, AuthR
             _logger.LogWarning("Logout token has no 'sid' claim; access tokens stay valid until they expire");
         }
 
-        // 4. Clear the stored refresh token in Local Database
+        // Clear the stored refresh token in Local Database
         var user = await FindLocalUserAsync(claims?.Subject, request.RefreshToken);
         if (user is null)
         {
