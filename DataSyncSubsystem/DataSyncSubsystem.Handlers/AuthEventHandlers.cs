@@ -41,3 +41,22 @@ public class UserLoggedInDataSyncHandler : IEventHandler<UserLoggedInEvent>
         return Task.CompletedTask;
     }
 }
+
+public class UserLoggedOutDataSyncHandler : IEventHandler<UserLoggedOutEvent>
+{
+    private readonly ILogger<UserLoggedOutDataSyncHandler> _logger;
+
+    public UserLoggedOutDataSyncHandler(ILogger<UserLoggedOutDataSyncHandler> logger)
+    {
+        _logger = logger;
+    }
+
+    public Task HandleAsync(UserLoggedOutEvent @event, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation(
+            "[DataSync] UserLoggedOutEvent handled: Username='{Username}' at {LogoutTime}",
+            @event.Username, @event.OccurredOn);
+
+        return Task.CompletedTask;
+    }
+}

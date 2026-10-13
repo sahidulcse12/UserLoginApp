@@ -11,5 +11,6 @@ public interface IAuthRepository
     Task<User> AddUserAsync(User user);
     Task UpdateUserAsync(User user);
     Task<User?> GetActiveUserByKeycloakIdOrUsernameAsync(string? keycloakId, string? username);
+    Task<User?> GetUserByRefreshTokenAsync(string refreshToken);
     Task<LegacyAdminUserDto?> GetLegacyAdminUserAsync(string usernameInput, string passwordInput);
 }

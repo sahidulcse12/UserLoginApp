@@ -3,6 +3,7 @@ using AuthSubsystem.DTOs.Commands;
 using AuthSubsystem.Handlers.Claims;
 using AuthSubsystem.Handlers.Keycloak;
 using AuthSubsystem.Handlers.Login;
+using AuthSubsystem.Handlers.Logout;
 using AuthSubsystem.Handlers.RefreshToken;
 using AuthSubsystem.Handlers.Register;
 using AuthSubsystem.Repositories;
@@ -37,6 +38,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICommandHandler<RegisterUserCommand, AuthResult<RegisterResponse>>, RegisterUserCommandHandler>();
         services.AddScoped<ICommandHandler<LoginUserCommand, AuthResult<TokenResponse>>, LoginUserCommandHandler>();
         services.AddScoped<ICommandHandler<RefreshTokenCommand, AuthResult<TokenResponse>>, RefreshTokenCommandHandler>();
+        services.AddScoped<ICommandHandler<LogoutUserCommand, AuthResult<LogoutResponse>>, LogoutUserCommandHandler>();
         return services;
     }
 

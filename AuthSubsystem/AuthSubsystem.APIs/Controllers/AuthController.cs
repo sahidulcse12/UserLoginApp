@@ -42,4 +42,13 @@ public class AuthController : ControllerBase
             ? Ok(result.Data)
             : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
     }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
+    {
+        var result = await _serviceBus.SendCommandAsync(new LogoutUserCommand(request));
+        return result.Success
+            ? Ok(result.Data)
+            : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
+    }
 }

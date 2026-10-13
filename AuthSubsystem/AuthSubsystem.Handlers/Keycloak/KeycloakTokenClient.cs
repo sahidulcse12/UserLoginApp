@@ -102,6 +102,32 @@ internal sealed class KeycloakTokenClient
         }
     }
 
+    // Ends the Keycloak session that owns this refresh token (Keycloak answers 204 No Content)
+    public async Task<bool> LogoutAsync(string refreshToken)
+    {
+        using var http = new HttpClient();
+        var logoutUrl = $"{_cfg.BaseUrl}/realms/{_cfg.Realm}/protocol/openid-connect/logout";
+        var form = BuildLogoutForm(refreshToken);
+
+        try
+        {
+            var response = await http.PostAsync(logoutUrl, new FormUrlEncodedContent(form));
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Keycloak logout failed — HTTP {Status}: {Error}", response.StatusCode, err);
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception while logging out of Keycloak");
+            return false;
+        }
+    }
+
     private async Task<string?> TryClientCredentialsAsync(HttpClient http, List<string> errors)
     {
         var url = $"{_cfg.BaseUrl}/realms/{_cfg.Realm}/protocol/openid-connect/token";
@@ -194,6 +220,18 @@ internal sealed class KeycloakTokenClient
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
+            ["client_id"] = _cfg.ClientId,
+            ["refresh_token"] = refreshToken
+        };
+        if (!string.IsNullOrEmpty(_cfg.ClientSecret))
+            form["client_secret"] = _cfg.ClientSecret;
+        return form;
+    }
+
+    private Dictionary<string, string> BuildLogoutForm(string refreshToken)
+    {
+        var form = new Dictionary<string, string>
+        {
             ["client_id"] = _cfg.ClientId,
             ["refresh_token"] = refreshToken
         };

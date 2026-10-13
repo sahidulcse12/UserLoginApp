@@ -14,6 +14,7 @@ public interface IKeycloakAdminService
     Task<bool> ClearRequiredActionsAsync(string keycloakUserId);
     Task<TokenResponse?> LoginUserAsync(string username, string password);
     Task<TokenResponse?> RefreshTokenAsync(string refreshToken);
+    Task<bool> LogoutAsync(string refreshToken);
 }
 
 public sealed class KeycloakAdminService : IKeycloakAdminService
@@ -40,6 +41,9 @@ public sealed class KeycloakAdminService : IKeycloakAdminService
 
     public Task<TokenResponse?> RefreshTokenAsync(string refreshToken)
         => _tokenClient.RefreshTokenAsync(refreshToken);
+
+    public Task<bool> LogoutAsync(string refreshToken)
+        => _tokenClient.LogoutAsync(refreshToken);
 
     // ── User Management ──────────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IEventHandler<UserRegisteredEvent>, UserRegisteredDataSyncHandler>();
         services.AddScoped<IEventHandler<UserLoggedInEvent>, UserLoggedInDataSyncHandler>();
+        services.AddScoped<IEventHandler<UserLoggedOutEvent>, UserLoggedOutDataSyncHandler>();
         return services;
     }
 }

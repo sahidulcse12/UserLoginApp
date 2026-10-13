@@ -7,3 +7,5 @@ public record RegisterUserCommand(RegisterRequest Request) : ICommand<AuthResult
 public record LoginUserCommand(LoginRequest Request) : ICommand<AuthResult<TokenResponse>>;
 
 public record RefreshTokenCommand(RefreshTokenRequest Request) : ICommand<AuthResult<TokenResponse>>;
+
+public record LogoutUserCommand(LogoutRequest Request) : ICommand<AuthResult<LogoutResponse>>;

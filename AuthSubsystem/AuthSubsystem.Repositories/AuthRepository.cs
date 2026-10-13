@@ -59,6 +59,11 @@ public class AuthRepository : IAuthRepository
             (u.KeycloakId == keycloakId || (!string.IsNullOrEmpty(username) && u.Username == username)) && u.IsActive);
     }
 
+    public async Task<User?> GetUserByRefreshTokenAsync(string refreshToken)
+    {
+        return await _db.Users.FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
+    }
+
     public async Task<LegacyAdminUserDto?> GetLegacyAdminUserAsync(string usernameInput, string passwordInput)
     {
         try
