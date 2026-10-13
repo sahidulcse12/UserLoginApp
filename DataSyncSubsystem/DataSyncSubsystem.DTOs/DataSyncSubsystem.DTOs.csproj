@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../Shared/SharedSubsystem.DTOs/SharedSubsystem.DTOs.csproj" />
+  </ItemGroup>
+
+</Project>

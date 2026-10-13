@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../DataSyncSubsystem.Handlers/DataSyncSubsystem.Handlers.csproj" />
+    <ProjectReference Include="../DataSyncSubsystem.DTOs/DataSyncSubsystem.DTOs.csproj" />
+  </ItemGroup>
+
+</Project>

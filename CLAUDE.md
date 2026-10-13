@@ -4,25 +4,30 @@ Guidance for working in this repo. The architecture follows the BdjobsMIS **Auth
 
 ## Project at a glance
 
-- **UserLoginApp.Api**: a .NET 8 Web API (SDK pinned in `global.json` to 8.0.412). It handles user login and access control on top of **Keycloak** (`https://auth.bdjobs.com`, realm `UserLogin`). It uses EF Core 8 on SQL Server (`bdjEmails` DB, `kc` schema) and stores passwords with BCrypt.
+- A .NET 8 backend (SDK pinned in `global.json` to 8.0.412; shared project settings live in `Directory.Build.props`). It handles user login and access control on top of **Keycloak** (`https://auth.bdjobs.com`, realm `UserLogin`). It uses EF Core 8 on SQL Server (`bdjEmails` DB, `kc` schema) and stores passwords with BCrypt.
+- **Hosts:** `AuthSubsystem.APIs` (http://localhost:5000) and `RolesSubsystem.APIs` (http://localhost:5002). Swagger is at `/swagger` on both.
+- The Auth host keeps `<AssemblyName>UserLoginApp.Api</AssemblyName>`, so the published DLL name and the existing deployment stay unchanged. It runs behind the gateway under the `/KeycloakLogin` path prefix; its `Program.cs` rewrites `PathBase` for that and honours forwarded headers.
 - **KeycloakTheme/**: a custom Keycloak login theme.
 - **UserLoginApp.Web**: build output only, with no source.
-- The API is hosted behind a gateway under the `/KeycloakLogin` path prefix. `Program.cs` rewrites `PathBase` for it and honours forwarded headers.
 
 Commands (run from the repo root):
 ```
 dotnet build UserLoginApp.sln
-dotnet run --project UserLoginApp.Api            # http://localhost:5000, Swagger at /swagger
-dotnet ef migrations add <Name> --project UserLoginApp.Api
+dotnet run --project AuthSubsystem/AuthSubsystem.APIs     # :5000
+dotnet run --project RolesSubsystem/RolesSubsystem.APIs   # :5002
+dotnet tool restore                                       # dotnet-ef, from .config/dotnet-tools.json
+dotnet ef migrations add <Name> --project AuthSubsystem/AuthSubsystem.Repositories --startup-project AuthSubsystem/AuthSubsystem.APIs
 ```
-`Program.cs` runs `DbSeeder.SeedAsync` on startup, and that call hits both the DB and Keycloak.
+The Auth `Program.cs` runs `DbSeeder.SeedAsync` on startup. It is currently a no-op, but it receives both the DbContext and the Keycloak service.
+`dotnet ef migrations has-pending-model-changes` currently reports changes. That predates the five-layer refactor: the snapshot still lists the Role/Feature tables, which the model doesn't map.
 
 ## Architecture
 
 ### Rules that matter
-- **Controllers stay thin.** A controller only dispatches to an orchestrator or the service bus and shapes the HTTP result. It holds no business logic, no DbContext, and no Keycloak calls.
+- **Controllers stay thin.** A controller injects `IServiceBus`, sends a command and shapes the HTTP result. It holds no business logic, no DbContext, and no Keycloak calls.
 - **Everything is in-process through the ServiceBus.** No HTTP calls between subsystems.
-- **Subsystems never reference each other.** Only `Orchestrators/` may coordinate across subsystems. Cross-subsystem side effects go through events (`BroadcastEventAsync`), as in `Subsystems/DataSync`.
+- **Subsystems never reference each other.** Cross-subsystem side effects go through events (`BroadcastEventAsync`), and the event types that cross a boundary live in `SharedSubsystem.DTOs/IntegrationEvents`. When a flow genuinely spans subsystems, add an Orchestrator project; it's the only project allowed to reference several subsystems. None exists yet.
+- **One documented exception:** `AuthSubsystem.APIs` references `DataSyncSubsystem.APIs` and calls `AddDataSyncSubsystem()`. Because the bus is in-memory, DataSync's handlers have to run in the process that raises `UserRegisteredEvent` and `UserLoggedInEvent`. DataSync has no host of its own.
 - **Repositories take and return entities.** Handlers map from DTOs/commands to entities before they call a repository.
 
 ### Five layers per subsystem (required)
@@ -30,42 +35,43 @@ Every subsystem (`Auth`, `Roles`, `DataSync`, and any new one) is split into **f
 
 ```
 <X>Subsystem/
-  <X>Subsystem.APIs          -> Handlers, DTOs, ServiceBus, Shared.Handlers
-  <X>Subsystem.Handlers      -> Repositories, DTOs, Shared.Handlers
+  <X>Subsystem.APIs          -> Handlers, DTOs, ServiceBus.Handlers, SharedSubsystem.Handlers
+  <X>Subsystem.Handlers      -> Repositories, DTOs, SharedSubsystem.Handlers
   <X>Subsystem.Repositories  -> Aggregators, DTOs
   <X>Subsystem.Aggregators   -> DTOs
-  <X>Subsystem.DTOs          -> Shared.DTOs (+ Shared.Handlers only if it needs Event types)
+  <X>Subsystem.DTOs          -> SharedSubsystem.DTOs
 ```
+A layer with nothing in it yet still gets its project; DataSync's DTOs, Aggregators and Repositories are empty for now.
 
-| Layer | Contains | Auth examples |
+| Layer | Contains | Examples in this repo |
 |---|---|---|
-| **DTOs** | Commands, queries, events, request/response DTOs, settings POCOs | `LoginUserCommand`, `RegisterUserCommand`, `RefreshTokenCommand`, `UserRegisteredEvent`, `LoginRequest`, `TokenResponse`, `KeycloakConfig` |
-| **Aggregators** | EF entities (`Entities/`, `[Table]`, `IEntity<TKey>`), AutoMapper `Profile`, `Abstractions/I*Aggregator` | `Entities/User`, `Role`, `Feature`, `RoleFeature`, `UserRole`; `AuthMappingProfile` |
-| **Repositories** | `Data/*DbContext`, `Abstractions/I*Repository` and implementations, migrations | `AppDbContext`, `IAuthRepository`/`AuthRepository` |
-| **Handlers** | `<Feature>/*Handler.cs`, `Validators/*Validator.cs`, external-service clients the handlers use | `Login/LoginUserCommandHandler`, `Register/RegisterUserCommandHandler`; `Validators/LoginRequestValidator`; Keycloak clients |
-| **APIs** | `Program.cs`, `Extensions/ServiceCollectionExtensions.cs`, thin `Controllers/` | `AuthController`, `RolesController` |
+| **DTOs** | Commands, subsystem-internal events, request/response DTOs, settings POCOs | `Commands/AuthCommands.cs`, `AuthDtos.cs` (`LoginRequest`, `TokenResponse`, `AuthResult<T>`), `Commands/RoleCommands.cs` (+ `RoleCreatedEvent`) |
+| **Aggregators** | Entities (`Entities/`); later AutoMapper `Profile`s | Auth: `Entities/User`. Roles: `Entities/Role`, `Feature`, `RoleFeature`, `UserRole` |
+| **Repositories** | `Data/*DbContext`, `Migrations/`, `Abstractions/I*Repository`, implementations | `AppDbContext`, `IAuthRepository`/`AuthRepository`; `IRoleRepository`/`RoleRepository` (in-memory defaults, no role tables yet) |
+| **Handlers** | One folder per feature (`<Feature>/*Handler.cs`), external-service clients, claims transformation, seeding; later `Validators/` | `Login/`, `Register/`, `RefreshToken/`, `Keycloak/`, `Claims/FeatureClaimsTransformation`, `Seeding/DbSeeder`; Roles: `GetRoles/`, `GetRoleById/`, `CreateRole/` |
+| **APIs** | `Program.cs` (hosts), `Extensions/ServiceCollectionExtensions.cs`, thin `Controllers/` | `AuthController`, `RolesController`; `DataSyncSubsystem.APIs` is a class library holding only `AddDataSyncSubsystem()` |
 
-Shared infrastructure sits outside the subsystems, and every subsystem may reference it:
-- **Shared.DTOs**: marker interfaces (`ICommand<TResult>`, `IEvent`, `IEntity<TKey>`).
-- **Shared.Handlers**: handler interfaces (`ICommandHandler<,>`, `IEventHandler<>`) and cross-cutting handlers such as `FeatureClaimsTransformation`.
-- **ServiceBus**: `IServiceBus` / `InMemoryServiceBus` and an `AddServiceBus()` extension.
-- **Orchestrators**: the only project allowed to reference more than one subsystem.
+Shared infrastructure (`Shared/`), which every subsystem may reference:
+- **SharedSubsystem.DTOs**: marker interfaces `ICommand<TResult>` and `IEvent`, plus `IntegrationEvents/` for events that cross subsystems.
+- **SharedSubsystem.Handlers**: `ICommandHandler<,>`, `IEventHandler<>` and the `IServiceBus` interface. The interface sits here so that handlers can broadcast events.
+- **ServiceBus.Handlers**: `InMemoryServiceBus` and `AddServiceBus()`.
 
-The current code (`UserLoginApp.Api` with `Controllers/`, `Core/Messaging/`, `Subsystems/`, `Data/`, `Models/`, `Services/`) is a single project and has to be moved into this layout. New code goes straight into the five-layer structure; don't add more code to the old folders.
+Entities never cross subsystems. For example, `UserRole` holds only a `UserId`, with no navigation to Auth's `User`.
 
 Conventions:
 - The DbContext uses Fluent configuration: `OnModelCreating` calls a private `Configure<Entity>(EntityTypeBuilder<T>)` for each entity.
 - Validators follow the `RuleFor(...).Cascade(CascadeMode.Stop).NotNull().NotEmpty().MaximumLength(n).Must(...)` shape.
-- Move DI registration out of `Program.cs` into extension methods (`AddDatabase`, `Add<X>SubsystemServices`, `AddJwtAuthentication`, `AddCorsPolicy`, `AddSwaggerDocumentation`) so that `Program.cs` reads as a list.
+- DI registration lives in each host's `Extensions/ServiceCollectionExtensions.cs` (`AddDatabase`, `Add<X>SubsystemServices`, `AddKeycloakJwtAuthentication`, `AddCorsPolicy`, `AddSwaggerDocumentation`), so that `Program.cs` reads as a list.
+- Library projects that need ASP.NET Core or `Microsoft.Extensions.*` types get `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Their implicit usings don't include `Microsoft.Extensions.Logging` and similar namespaces, so add those usings explicitly.
 - Use correct spelling in new names: `Extensions`, `Abstractions`, `AddServiceBus`. The reference has typos; don't copy them.
 
 ### Adding a feature
 Work from the bottom layer up:
-1. **DTOs:** add `record XCommand(...) : ICommand<TResult>`, the request/response DTOs, and any `record XEvent(..., DateTime OccurredOn) : IEvent`.
-2. **Aggregators:** add or extend the entity, and add the DTO ↔ entity mapping to the subsystem's AutoMapper `Profile`.
+1. **DTOs:** add `record XCommand(...) : ICommand<TResult>` and the request/response DTOs. A `record XEvent(..., DateTime OccurredOn) : IEvent` goes here if only this subsystem uses it, or in `SharedSubsystem.DTOs/IntegrationEvents` if another subsystem handles it.
+2. **Aggregators:** add or extend the entity, and add the DTO ↔ entity mapping. For now mapping is manual and lives in the Handlers project (for example `RoleMapping.ToResponse`); it moves to an AutoMapper `Profile` once AutoMapper is added.
 3. **Repositories:** add the method to `I<X>Repository` and its implementation. It takes and returns entities. Add a migration if the schema changes.
-4. **Handlers:** add `<Feature>/XCommandHandler : ICommandHandler<XCommand, TResult>` and `Validators/XValidator`. Validate first, then map to entities, call the repositories and services, broadcast events, and return the result.
-5. **APIs:** add a controller action that dispatches through the bus (or through an orchestrator if the flow spans subsystems). Register the handler in `Extensions/ServiceCollectionExtensions.cs` with `AddScoped<ICommandHandler<XCommand, TResult>, XCommandHandler>()`, and do the same for each `IEventHandler<>`. Registration is manual, and the bus throws `InvalidOperationException` if a handler is missing.
+4. **Handlers:** add `<Feature>/XCommandHandler : ICommandHandler<XCommand, TResult>`. Validate first (inline checks for now, `Validators/` once FluentValidation is added), then map to entities, call the repositories and services, broadcast events, and return the result.
+5. **APIs:** add a controller action that dispatches through `IServiceBus`. Register the handler in `Extensions/ServiceCollectionExtensions.cs` with `AddScoped<ICommandHandler<XCommand, TResult>, XCommandHandler>()`, and do the same for each `IEventHandler<>`. Registration is manual, and the bus throws `InvalidOperationException` if a handler is missing.
 
 ### Results and errors
 - Auth handlers return `AuthResult<T>` (`Ok(data)` / `Fail(statusCode, message)`). Controllers map it to `Ok(result.Data)` or `StatusCode(result.StatusCode, new { message })`. **Keep returning real HTTP status codes.** The reference returns 200 for everything and carries failure in an `Event` envelope, and that is listed as a weakness.
@@ -79,13 +85,13 @@ Work from the bottom layer up:
   2. If that fails, fall back to a **legacy `dbo.ADMIN` migration**: provision the user in Keycloak as `mis`, upsert the local `User` with a BCrypt hash, then log in again. If the login fails because of required actions, clear them and retry once.
   3. Store the refresh token on the local user and broadcast `UserLoggedInEvent`.
 - **Register** accepts the user types `corporate`, `mybdjobs` and `mis`. The user is created in Keycloak first, then persisted locally, then `UserRegisteredEvent` is broadcast.
-- **Authorization data** lives in the local DB (Users → UserRoles → Roles → RoleFeatures → Features). `FeatureClaimsTransformation` resolves the user by `sub` or `preferred_username`, creating them on first sight, and adds the feature claims.
+- **Authorization data:** the live DB currently has only `kc.Users`. The Role, Feature, RoleFeature and UserRole entities exist in `RolesSubsystem.Aggregators`, but no tables back them yet; `RoleRepository` serves three default roles from memory. `FeatureClaimsTransformation` resolves the user by `sub` or `preferred_username` (creating them on first sight) and adds a `userType` claim.
 - When doing module/feature checks, match **exact IDs**. Never use substring `Contains` on a delimited claim string, because `"5"` would match `"57"`.
 
 ## Testing pattern
 There is no test project yet. When adding one, use xUnit, Moq and FluentAssertions:
 - **Handler tests** use real mapping profiles and validators. Mock the repositories, `IKeycloakAdminService`, `IServiceBus` and `IHttpContextAccessor`, and use a `DefaultHttpContext`. Build config with `ConfigurationBuilder().AddInMemoryCollection(...)` and log with `NullLogger<T>.Instance`. Group tests with a `#region` per handler, name them `Method_ShouldX_WhenY`, and use `[Theory]` for invalid inputs.
-- **Controller tests** mock the orchestrator or bus and assert the result type, plus that the right command was sent.
+- **Controller tests** mock `IServiceBus` and assert the result type, plus that the right command was sent.
 
 ## Don't repeat these (known weaknesses from the reference)
 1. Never compare plaintext passwords and never log passwords. `GetLegacyAdminUserAsync` matches the plaintext `UPASS` of the legacy table; confine that to the migration path.

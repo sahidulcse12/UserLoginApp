@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../RolesSubsystem.Aggregators/RolesSubsystem.Aggregators.csproj" />
+    <ProjectReference Include="../RolesSubsystem.DTOs/RolesSubsystem.DTOs.csproj" />
+  </ItemGroup>
+
+</Project>

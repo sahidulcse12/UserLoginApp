@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Keep the published DLL name so the existing deployment keeps working -->
+    <AssemblyName>UserLoginApp.Api</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.13">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AuthSubsystem.Handlers/AuthSubsystem.Handlers.csproj" />
+    <ProjectReference Include="../AuthSubsystem.DTOs/AuthSubsystem.DTOs.csproj" />
+    <ProjectReference Include="../../Shared/ServiceBus.Handlers/ServiceBus.Handlers.csproj" />
+    <ProjectReference Include="../../Shared/SharedSubsystem.Handlers/SharedSubsystem.Handlers.csproj" />
+    <!-- Composition-root exception: DataSync's event handlers run in this process -->
+    <ProjectReference Include="../../DataSyncSubsystem/DataSyncSubsystem.APIs/DataSyncSubsystem.APIs.csproj" />
+  </ItemGroup>
+
+</Project>

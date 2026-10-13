@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.13" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../RolesSubsystem.Handlers/RolesSubsystem.Handlers.csproj" />
+    <ProjectReference Include="../RolesSubsystem.DTOs/RolesSubsystem.DTOs.csproj" />
+    <ProjectReference Include="../../Shared/ServiceBus.Handlers/ServiceBus.Handlers.csproj" />
+    <ProjectReference Include="../../Shared/SharedSubsystem.Handlers/SharedSubsystem.Handlers.csproj" />
+  </ItemGroup>
+
+</Project>

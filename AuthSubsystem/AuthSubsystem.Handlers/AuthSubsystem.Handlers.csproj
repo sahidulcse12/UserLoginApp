@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AuthSubsystem.Repositories/AuthSubsystem.Repositories.csproj" />
+    <ProjectReference Include="../AuthSubsystem.DTOs/AuthSubsystem.DTOs.csproj" />
+    <ProjectReference Include="../../Shared/SharedSubsystem.Handlers/SharedSubsystem.Handlers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+  </ItemGroup>
+
+</Project>
