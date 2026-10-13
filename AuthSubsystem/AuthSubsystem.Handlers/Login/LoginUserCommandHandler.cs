@@ -174,6 +174,12 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
         var user = await _authRepo.GetUserByUsernameOrEmailAsync(username);
         if (user is null) return;
 
+        // Keep KeycloakId in step with the Keycloak account (it changes if the account is recreated);
+        // logout finds the local user by it. The token comes straight from Keycloak, so it is trusted.
+        var keycloakId = KeycloakTokenReader.TryReadClaims(tokenResponse.AccessToken)?.Subject;
+        if (!string.IsNullOrEmpty(keycloakId))
+            user.KeycloakId = keycloakId;
+
         user.RefreshToken = tokenResponse.RefreshToken;
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddSeconds(
             tokenResponse.RefreshExpiresIn > 0 ? tokenResponse.RefreshExpiresIn : 1800);

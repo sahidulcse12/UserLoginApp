@@ -6,6 +6,7 @@ using AuthSubsystem.Handlers.Login;
 using AuthSubsystem.Handlers.Logout;
 using AuthSubsystem.Handlers.RefreshToken;
 using AuthSubsystem.Handlers.Register;
+using AuthSubsystem.Handlers.Sessions;
 using AuthSubsystem.Repositories;
 using AuthSubsystem.Repositories.Abstractions;
 using AuthSubsystem.Repositories.Data;
@@ -35,6 +36,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
 
+        // In-memory for a single instance; switch to a shared cache (e.g. Redis) when scaling out
+        services.AddDistributedMemoryCache();
+        services.AddSingleton<IRevokedSessionStore, DistributedRevokedSessionStore>();
+
         services.AddScoped<ICommandHandler<RegisterUserCommand, AuthResult<RegisterResponse>>, RegisterUserCommandHandler>();
         services.AddScoped<ICommandHandler<LoginUserCommand, AuthResult<TokenResponse>>, LoginUserCommandHandler>();
         services.AddScoped<ICommandHandler<RefreshTokenCommand, AuthResult<TokenResponse>>, RefreshTokenCommandHandler>();
@@ -57,6 +62,20 @@ public static class ServiceCollectionExtensions
                     ValidateIssuer = true,
                     ValidateAudience = false,          // audience checked via Keycloak roles/scopes
                     NameClaimType = "preferred_username"
+                };
+
+                // Reject access tokens whose Keycloak session was ended through /api/auth/logout
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        var sessionId = context.Principal?.FindFirst("sid")?.Value;
+                        if (string.IsNullOrEmpty(sessionId)) return;
+
+                        var revokedSessions = context.HttpContext.RequestServices.GetRequiredService<IRevokedSessionStore>();
+                        if (await revokedSessions.IsRevokedAsync(sessionId, context.HttpContext.RequestAborted))
+                            context.Fail("Session has been logged out.");
+                    }
                 };
             });
 

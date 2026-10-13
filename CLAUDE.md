@@ -83,7 +83,11 @@ Work from the bottom layer up:
   1. Try a Keycloak password grant.
   2. If that fails, fall back to a **legacy `dbo.ADMIN` migration**: provision the user in Keycloak as `mis`, upsert the local `User` with a BCrypt hash, then log in again. If the login fails because of required actions, clear them and retry once.
   3. Store the refresh token on the local user and broadcast `UserLoggedInEvent`.
-- **Logout** (`POST /api/auth/logout`, body `{ "refreshToken": "..." }`): posts the refresh token to Keycloak's OpenID Connect `logout` endpoint, which ends that session. It then clears `RefreshToken`/`RefreshTokenExpiryTime` on the local user who holds that token and broadcasts `UserLoggedOutEvent`. If Keycloak rejects the token, the endpoint returns 401. The access token stays valid until it expires, so clients must discard it themselves.
+- **Logout** (`POST /api/auth/logout`, body `{ "refreshToken": "..." }`, no Bearer token needed):
+  1. Posts the refresh token to Keycloak's OpenID Connect `logout` endpoint, which ends the session. If Keycloak rejects the token, the endpoint returns 401.
+  2. Marks the session id (`sid`) as revoked in `IRevokedSessionStore`. `OnTokenValidated` then rejects that session's access tokens in this API straight away. The store is in-memory (`AddDistributedMemoryCache`), so it must move to a shared cache such as Redis before running more than one instance. Other services that validate Keycloak tokens themselves don't see this list.
+  3. Finds the local user by Keycloak user id (`sub`), falling back to the stored refresh token, then clears `RefreshToken`/`RefreshTokenExpiryTime` and broadcasts `UserLoggedOutEvent`. A repeat logout returns 200 without updating anything or sending the event again.
+- **Keycloak id sync:** login stores the access token's `sub` as `User.KeycloakId`, since it changes if the Keycloak account is recreated.
 - **Register** accepts the user types `corporate`, `mybdjobs` and `mis`. The user is created in Keycloak first, then persisted locally, then `UserRegisteredEvent` is broadcast.
 - **Authorization data:** the live DB currently has only `kc.Users`; there are no role or feature tables yet. `FeatureClaimsTransformation` resolves the user by `sub` or `preferred_username` (creating them on first sight) and adds a `userType` claim.
 - When doing module/feature checks, match **exact IDs**. Never use substring `Contains` on a delimited claim string, because `"5"` would match `"57"`.
