@@ -55,8 +55,8 @@ app.UseSwagger(c =>
 
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("//swagger/v1/swagger.json", "UserLoginApp API v1");
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserLoginApp API v1 (Local)");
+    // Relative to /swagger/index.html, so it also resolves under the /KeycloakLogin gateway prefix
+    c.SwaggerEndpoint("v1/swagger.json", "UserLoginApp API v1");
     c.RoutePrefix = "swagger";
 });
 
