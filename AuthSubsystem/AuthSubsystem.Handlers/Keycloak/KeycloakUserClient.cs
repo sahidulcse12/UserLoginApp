@@ -114,6 +114,43 @@ internal sealed class KeycloakUserClient
         }
     }
 
+    public async Task<bool> SendResetPasswordEmailAsync(string keycloakUserId)
+    {
+        if (string.IsNullOrEmpty(keycloakUserId)) return false;
+        try
+        {
+            var http  = await _tokenClient.CreateAuthorizedClientAsync();
+            var query = new List<string>();
+
+            // Keycloak only accepts redirect_uri together with the client it belongs to
+            if (!string.IsNullOrWhiteSpace(_cfg.ResetPasswordRedirectUri))
+            {
+                query.Add($"client_id={Uri.EscapeDataString(_cfg.ClientId)}");
+                query.Add($"redirect_uri={Uri.EscapeDataString(_cfg.ResetPasswordRedirectUri)}");
+            }
+            if (_cfg.ResetPasswordLinkLifespanSeconds is > 0)
+                query.Add($"lifespan={_cfg.ResetPasswordLinkLifespanSeconds}");
+
+            var url = $"{_cfg.BaseUrl}/admin/realms/{_cfg.Realm}/users/{keycloakUserId}/execute-actions-email";
+            if (query.Count > 0) url += "?" + string.Join("&", query);
+
+            var resp = await http.PutAsync(url, JsonContent(new[] { "UPDATE_PASSWORD" }));
+            if (!resp.IsSuccessStatusCode)
+            {
+                var err = await resp.Content.ReadAsStringAsync();
+                _logger.LogError("Reset password email failed for Keycloak user '{UserId}' — HTTP {Status}: {Error}",
+                    keycloakUserId, (int)resp.StatusCode, err);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception sending reset password email for Keycloak user '{UserId}'", keycloakUserId);
+            return false;
+        }
+    }
+
     public async Task<bool> ClearRequiredActionsAsync(string keycloakUserId)
     {
         if (string.IsNullOrEmpty(keycloakUserId)) return false;

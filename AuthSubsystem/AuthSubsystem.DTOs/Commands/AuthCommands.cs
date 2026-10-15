@@ -9,3 +9,5 @@ public record LoginUserCommand(LoginRequest Request) : ICommand<AuthResult<Token
 public record RefreshTokenCommand(RefreshTokenRequest Request) : ICommand<AuthResult<TokenResponse>>;
 
 public record LogoutUserCommand(LogoutRequest Request) : ICommand<AuthResult<LogoutResponse>>;
+
+public record ForgotPasswordCommand(ForgotPasswordRequest Request) : ICommand<AuthResult<ForgotPasswordResponse>>;

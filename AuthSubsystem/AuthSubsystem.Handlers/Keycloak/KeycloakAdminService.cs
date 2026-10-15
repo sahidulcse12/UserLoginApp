@@ -12,6 +12,7 @@ public interface IKeycloakAdminService
     Task<string?> EnsureGroupExistsAndGetIdAsync(string groupName);
     Task<bool> SetUserPasswordAsync(string keycloakUserId, string password);
     Task<bool> ClearRequiredActionsAsync(string keycloakUserId);
+    Task<bool> SendResetPasswordEmailAsync(string keycloakUserId);
     Task<TokenResponse?> LoginUserAsync(string username, string password);
     Task<TokenResponse?> RefreshTokenAsync(string refreshToken);
     Task<bool> LogoutAsync(string refreshToken);
@@ -80,6 +81,9 @@ public sealed class KeycloakAdminService : IKeycloakAdminService
 
     public Task<bool> ClearRequiredActionsAsync(string keycloakUserId)
         => _userClient.ClearRequiredActionsAsync(keycloakUserId);
+
+    public Task<bool> SendResetPasswordEmailAsync(string keycloakUserId)
+        => _userClient.SendResetPasswordEmailAsync(keycloakUserId);
 
     // ── Group Management ─────────────────────────────────────────────────────
 

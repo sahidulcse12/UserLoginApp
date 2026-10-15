@@ -51,4 +51,13 @@ public class AuthController : ControllerBase
             ? Ok(result.Data)
             : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
     }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var result = await _serviceBus.SendCommandAsync(new ForgotPasswordCommand(request));
+        return result.Success
+            ? Ok(result.Data)
+            : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
+    }
 }

@@ -11,6 +11,8 @@ public class KeycloakConfig
     public string AdminPassword { get; init; } = string.Empty;
     public string ClientId { get; init; } = "user-login-keycloak";
     public string ClientSecret { get; init; } = string.Empty;
+    public string? ResetPasswordRedirectUri { get; init; }
+    public int? ResetPasswordLinkLifespanSeconds { get; init; }
 
     public static KeycloakConfig FromConfiguration(IConfiguration config) => new()
     {
@@ -21,5 +23,7 @@ public class KeycloakConfig
         AdminPassword = config["Keycloak:AdminPassword"] ?? throw new InvalidOperationException("Keycloak:AdminPassword is not configured."),
         ClientId      = config["Keycloak:ClientId"] ?? "user-login-keycloak",
         ClientSecret  = config["Keycloak:ClientSecret"] ?? string.Empty,
+        ResetPasswordRedirectUri         = config["Keycloak:ResetPasswordRedirectUri"],
+        ResetPasswordLinkLifespanSeconds = int.TryParse(config["Keycloak:ResetPasswordLinkLifespanSeconds"], out var lifespan) ? lifespan : null,
     };
 }

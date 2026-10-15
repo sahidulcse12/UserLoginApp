@@ -1,6 +1,10 @@
-@UserLoginApp.Api_HostAddress = http://localhost:5041
+@UserLoginApp.Api_HostAddress = http://localhost:5000
 
-GET {{UserLoginApp.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+POST {{UserLoginApp.Api_HostAddress}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
 
 ###

@@ -43,6 +43,16 @@ public class LogoutResponse
     public string Message { get; set; } = "Logged out successfully.";
 }
 
+public class ForgotPasswordRequest
+{
+    public string Email { get; set; } = string.Empty;
+}
+
+public class ForgotPasswordResponse
+{
+    public string Message { get; set; } = "If an account with that email exists, a password reset link has been sent.";
+}
+
 public class TokenResponse
 {
     public string AccessToken { get; set; } = string.Empty;
