@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using AuthSubsystem.DTOs;
+using Microsoft.AspNetCore.Mvc;
 using AuthSubsystem.DTOs.Commands;
+using Microsoft.AspNetCore.Authorization;
 using SharedSubsystem.Handlers.Abstractions;
 
 namespace AuthSubsystem.APIs.Controllers;

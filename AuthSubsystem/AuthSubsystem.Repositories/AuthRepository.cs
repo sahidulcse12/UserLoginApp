@@ -76,10 +76,10 @@ public class AuthRepository : IAuthRepository
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                SELECT TOP 1 USER_NAME, E_mail 
+                SELECT TOP 1 USER_NAME, E_mail, ViewAccess, ModuleAccess, SubLinkAccess, DepId, AccessFromHome, AdminChk
                 FROM [dbo].[ADMIN] 
                 WHERE (LOWER(RTRIM(LTRIM(USER_NAME))) = LOWER(@user) OR LOWER(RTRIM(LTRIM(E_mail))) = LOWER(@user))
-                  AND (PASSWORD = @pass OR UPASS = @pass)
+                  AND (RTRIM(LTRIM(PASSWORD)) = @pass OR RTRIM(LTRIM(UPASS)) = @pass)
                   AND (Deleted IS NULL OR Deleted = 0)";
 
             var pUser = cmd.CreateParameter();
@@ -102,10 +102,23 @@ public class AuthRepository : IAuthRepository
                     dbEmail = $"{dbUsername}@bdjobs.com";
                 }
 
+                var viewAccess = reader.IsDBNull(2) ? null : reader.GetString(2)?.Trim();
+                var moduleAccess = reader.IsDBNull(3) ? null : reader.GetString(3)?.Trim();
+                var subLinkAccess = reader.IsDBNull(4) ? null : reader.GetString(4)?.Trim();
+                int? depId = reader.IsDBNull(5) ? null : Convert.ToInt32(reader.GetValue(5));
+                int? accessFromHome = reader.IsDBNull(6) ? null : Convert.ToInt32(reader.GetValue(6));
+                int adminChk = reader.IsDBNull(7) ? 0 : Convert.ToInt32(reader.GetValue(7));
+
                 return new LegacyAdminUserDto
                 {
                     Username = dbUsername,
-                    Email = dbEmail
+                    Email = dbEmail,
+                    ViewAccess = viewAccess,
+                    ModuleAccess = moduleAccess,
+                    SubLinkAccess = subLinkAccess,
+                    DepId = depId,
+                    AccessFromHome = accessFromHome,
+                    AdminChk = adminChk
                 };
             }
         }
