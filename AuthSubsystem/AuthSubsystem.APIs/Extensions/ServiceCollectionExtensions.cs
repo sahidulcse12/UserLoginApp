@@ -6,6 +6,7 @@ using AuthSubsystem.Handlers.Login;
 using AuthSubsystem.Handlers.Logout;
 using AuthSubsystem.Handlers.RefreshToken;
 using AuthSubsystem.Handlers.Register;
+using AuthSubsystem.Handlers.Roles;
 using AuthSubsystem.Handlers.Sessions;
 using AuthSubsystem.Repositories;
 using AuthSubsystem.Repositories.Abstractions;
@@ -30,7 +31,7 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddAuthSubsystemServices(this IServiceCollection services)
     {
-        // Enriches every authenticated request's ClaimsPrincipal with feature claims from DB
+        // Enriches every authenticated request's ClaimsPrincipal with feature claims & Keycloak roles
         services.AddScoped<IClaimsTransformation, FeatureClaimsTransformation>();
 
         services.AddScoped<IAuthRepository, AuthRepository>();
@@ -40,10 +41,17 @@ public static class ServiceCollectionExtensions
         services.AddDistributedMemoryCache();
         services.AddSingleton<IRevokedSessionStore, DistributedRevokedSessionStore>();
 
+        // Auth Command Handlers
         services.AddScoped<ICommandHandler<RegisterUserCommand, AuthResult<RegisterResponse>>, RegisterUserCommandHandler>();
         services.AddScoped<ICommandHandler<LoginUserCommand, AuthResult<TokenResponse>>, LoginUserCommandHandler>();
         services.AddScoped<ICommandHandler<RefreshTokenCommand, AuthResult<TokenResponse>>, RefreshTokenCommandHandler>();
         services.AddScoped<ICommandHandler<LogoutUserCommand, AuthResult<LogoutResponse>>, LogoutUserCommandHandler>();
+
+        // Dynamic Role & Permission Command Handlers (Keycloak-based for MIS, Corporate, MyBdjobs)
+        services.AddScoped<ICommandHandler<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>, GetAllUsersWithRolesQueryHandler>();
+        services.AddScoped<ICommandHandler<GetUserPermissionsQuery, AuthResult<UserPermissionsDto>>, GetUserPermissionsQueryHandler>();
+        services.AddScoped<ICommandHandler<AssignRoleCommand, AuthResult<UserPermissionsDto>>, AssignRoleCommandHandler>();
+
         return services;
     }
 

@@ -99,6 +99,56 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
         {
             keycloakId = await _keycloak.CreateUserAsync(
                 username, email, firstName, lastName, passwordInput, userType);
+
+            // Determine role strictly for MIS-Users based on dbo.ADMIN ViewAccess:
+            // 1. If ViewAccess contains "delete" (e.g. "view,edit,delete") or AdminChk == 1 -> admin
+            // 2. If ViewAccess contains "edit" (e.g. "view,edit") -> manager
+            // 3. Otherwise (only "view" or empty) -> staff
+            var viewAccessLower = (legacyAdmin.ViewAccess ?? string.Empty).ToLowerInvariant();
+            string assignedRole;
+            if (viewAccessLower.Contains("delete") || legacyAdmin.AdminChk == 1)
+            {
+                assignedRole = "admin";
+            }
+            else if (viewAccessLower.Contains("edit"))
+            {
+                assignedRole = "manager";
+            }
+            else
+            {
+                assignedRole = "staff";
+            }
+
+            _logger.LogInformation("Assigning MIS role '{Role}' to migrated user '{Username}' (ViewAccess: '{ViewAccess}')",
+                assignedRole, username, legacyAdmin.ViewAccess);
+
+            var moduleIds = !string.IsNullOrWhiteSpace(legacyAdmin.ModuleAccess)
+                ? legacyAdmin.ModuleAccess.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => int.TryParse(s, out _))
+                    .Select(int.Parse)
+                    .ToList()
+                : null;
+
+            var subLinkIds = !string.IsNullOrWhiteSpace(legacyAdmin.SubLinkAccess)
+                ? legacyAdmin.SubLinkAccess.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => int.TryParse(s, out _))
+                    .Select(int.Parse)
+                    .ToList()
+                : null;
+
+            await _keycloak.AssignRoleAndAttributesAsync(new AssignRoleRequest
+            {
+                Username = username,
+                Role = assignedRole,
+                UserType = "mis",
+                ModuleIds = moduleIds,
+                ViewAccess = legacyAdmin.ViewAccess,
+                SubLinkIds = subLinkIds,
+                DepartmentId = legacyAdmin.DepId,
+                AccessFromHome = legacyAdmin.AccessFromHome == 1
+            });
         }
         catch (Exception ex)
         {
@@ -197,5 +247,62 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
             UserType   = user.UserType,
             KeycloakId = user.KeycloakId
         };
+    }
+    private async Task SyncLegacyAdminRoleIfExistsAsync(string usernameInput, string passwordInput)
+    {
+        try
+        {
+            var legacyAdmin = await _authRepo.GetLegacyAdminUserAsync(usernameInput, passwordInput);
+            if (legacyAdmin == null) return;
+
+            var viewAccessLower = (legacyAdmin.ViewAccess ?? string.Empty).ToLowerInvariant();
+            string assignedRole;
+            if (viewAccessLower.Contains("delete") || legacyAdmin.AdminChk == 1)
+            {
+                assignedRole = "admin";
+            }
+            else if (viewAccessLower.Contains("edit"))
+            {
+                assignedRole = "manager";
+            }
+            else
+            {
+                assignedRole = "staff"; // Default role for ViewAccess = 'view' and AdminChk = 0
+            }
+
+            var moduleIds = !string.IsNullOrWhiteSpace(legacyAdmin.ModuleAccess)
+                ? legacyAdmin.ModuleAccess.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => int.TryParse(s, out _))
+                    .Select(int.Parse)
+                    .ToList()
+                : null;
+
+            var subLinkIds = !string.IsNullOrWhiteSpace(legacyAdmin.SubLinkAccess)
+                ? legacyAdmin.SubLinkAccess.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => int.TryParse(s, out _))
+                    .Select(int.Parse)
+                    .ToList()
+                : null;
+
+            await _keycloak.AssignRoleAndAttributesAsync(new AssignRoleRequest
+            {
+                Username = legacyAdmin.Username,
+                Role = assignedRole,
+                UserType = "mis",
+                ModuleIds = moduleIds,
+                ViewAccess = legacyAdmin.ViewAccess,
+                SubLinkIds = subLinkIds,
+                DepartmentId = legacyAdmin.DepId,
+                AccessFromHome = legacyAdmin.AccessFromHome == 1
+            });
+
+            _logger.LogInformation("Synced MIS role '{Role}' for user '{Username}' from dbo.ADMIN on login.", assignedRole, legacyAdmin.Username);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to background-sync legacy role for '{Username}' on login", usernameInput);
+        }
     }
 }

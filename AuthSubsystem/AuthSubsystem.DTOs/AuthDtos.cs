@@ -68,6 +68,12 @@ public class LegacyAdminUserDto
 {
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? ViewAccess { get; set; }
+    public string? ModuleAccess { get; set; }
+    public string? SubLinkAccess { get; set; }
+    public int? DepId { get; set; }
+    public int? AccessFromHome { get; set; }
+    public int AdminChk { get; set; }
 }
 
 public class AuthResult<T>

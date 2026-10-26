@@ -15,6 +15,11 @@ public interface IKeycloakAdminService
     Task<TokenResponse?> LoginUserAsync(string username, string password);
     Task<TokenResponse?> RefreshTokenAsync(string refreshToken);
     Task<bool> LogoutAsync(string refreshToken);
+
+    // Dynamic Role & Permission management across all user groups (MIS, Corporate, MyBdjobs)
+    Task<IEnumerable<KeycloakUserRoleDto>> GetAllUsersWithRolesAsync(string? filterUserType = null, CancellationToken cancellationToken = default);
+    Task<UserPermissionsDto?> GetUserPermissionsByUsernameAsync(string username, CancellationToken cancellationToken = default);
+    Task<bool> AssignRoleAndAttributesAsync(AssignRoleRequest request, CancellationToken cancellationToken = default);
 }
 
 public sealed class KeycloakAdminService : IKeycloakAdminService
@@ -88,6 +93,17 @@ public sealed class KeycloakAdminService : IKeycloakAdminService
 
     public Task<string?> EnsureGroupExistsAndGetIdAsync(string groupName)
         => _userClient.EnsureGroupExistsAndGetIdAsync(groupName);
+
+    // ── Dynamic Role & Permission Operations ──────────────────────────────────
+
+    public Task<IEnumerable<KeycloakUserRoleDto>> GetAllUsersWithRolesAsync(string? filterUserType = null, CancellationToken cancellationToken = default)
+        => _userClient.GetAllUsersWithRolesAsync(filterUserType, cancellationToken);
+
+    public Task<UserPermissionsDto?> GetUserPermissionsByUsernameAsync(string username, CancellationToken cancellationToken = default)
+        => _userClient.GetUserPermissionsByUsernameAsync(username, cancellationToken);
+
+    public Task<bool> AssignRoleAndAttributesAsync(AssignRoleRequest request, CancellationToken cancellationToken = default)
+        => _userClient.AssignRoleAndAttributesAsync(request, cancellationToken);
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
