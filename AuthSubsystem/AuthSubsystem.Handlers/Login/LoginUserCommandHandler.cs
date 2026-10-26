@@ -69,9 +69,21 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
             return AuthResult<TokenResponse>.Fail(401, reason);
         }
 
-        // 4. Update Token in Local Database & Sync Role from dbo.ADMIN
-        await SyncLegacyAdminRoleIfExistsAsync(request.Username, request.Password);
+        // 4. Update Token in Local Database immediately
         await SyncLocalUserTokenAsync(request.Username, tokenResponse);
+
+        // 5. Sync Role & Permissions from dbo.ADMIN in background (non-blocking for high login speed)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SyncLegacyAdminRoleIfExistsAsync(request.Username, request.Password);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background role sync failed for '{Username}'", request.Username);
+            }
+        });
 
         // 5. Broadcast Event to ServiceBus
         await _serviceBus.BroadcastEventAsync(new UserLoggedInEvent(
