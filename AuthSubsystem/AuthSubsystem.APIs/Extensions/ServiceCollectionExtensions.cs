@@ -93,21 +93,65 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddCorsPolicy(this IServiceCollection services, IConfiguration configuration)
     {
-        var allowedOrigins = (configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-            ?? new[] { "http://localhost:4200", "https://gateway.bdjobs.com" })
-            .Select(o => o.TrimEnd('/'))
-            .ToArray();
+        var configuredOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? new[]
+            {
+                "http://localhost:4200",
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "https://gateway.bdjobs.com",
+                "https://my.bdjobs.com",
+                "https://corporate.bdjobs.com",
+                "https://corporate3.bdjobs.com",
+                "https://jobs.bdjobs.com",
+                "https://bdjobs.com"
+            };
+
+        var allowedOrigins = new HashSet<string>(
+            configuredOrigins.Select(o => o.TrimEnd('/')),
+            StringComparer.OrdinalIgnoreCase);
 
         services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
             {
-                policy.WithOrigins(allowedOrigins)
-                      .AllowAnyMethod()
-                      .AllowAnyHeader()
-                      .AllowCredentials();
+                policy.SetIsOriginAllowed(origin =>
+                {
+                    if (string.IsNullOrWhiteSpace(origin))
+                        return false;
+
+                    // Direct match against explicitly configured origins
+                    if (allowedOrigins.Contains(origin.TrimEnd('/')))
+                        return true;
+
+                    if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    {
+                        var host = uri.Host;
+
+                        // Allow all *.bdjobs.com and bdjobs.com domains
+                        if (host.Equals("bdjobs.com", StringComparison.OrdinalIgnoreCase) ||
+                            host.EndsWith(".bdjobs.com", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+
+                        // Allow localhost and 127.0.0.1 on any port for local development
+                        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                            host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                })
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromHours(1));
             });
         });
+
         return services;
     }
 
