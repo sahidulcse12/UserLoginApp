@@ -68,11 +68,12 @@ public class AuthRepository : IAuthRepository
     {
         try
         {
-            var conn = _db.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open)
-            {
-                await conn.OpenAsync();
-            }
+            // Use a dedicated connection (not EF Core's internal one) to avoid
+            // connection-state conflicts and ensure the connection is returned
+            // to the pool immediately after the query completes.
+            var connectionString = _db.Database.GetConnectionString()!;
+            await using var conn = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+            await conn.OpenAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
