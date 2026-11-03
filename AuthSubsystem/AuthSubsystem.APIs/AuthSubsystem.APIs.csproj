@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="../AuthSubsystem.Handlers/AuthSubsystem.Handlers.csproj" />
     <ProjectReference Include="../AuthSubsystem.DTOs/AuthSubsystem.DTOs.csproj" />
-    <ProjectReference Include="../../Shared/ServiceBus.Handlers/ServiceBus.Handlers.csproj" />
+    <ProjectReference Include="../../ServiceBus.Handlers/ServiceBus.Handlers.csproj" />
     <ProjectReference Include="../../Shared/SharedSubsystem.Handlers/SharedSubsystem.Handlers.csproj" />
     <!-- Composition-root exception: DataSync's event handlers run in this process -->
     <ProjectReference Include="../../DataSyncSubsystem/DataSyncSubsystem.APIs/DataSyncSubsystem.APIs.csproj" />

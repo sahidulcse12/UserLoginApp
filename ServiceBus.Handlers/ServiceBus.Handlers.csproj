@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../SharedSubsystem.Handlers/SharedSubsystem.Handlers.csproj" />
+    <ProjectReference Include="../Shared/SharedSubsystem.Handlers/SharedSubsystem.Handlers.csproj" />
   </ItemGroup>
 
 </Project>

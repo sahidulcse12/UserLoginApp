@@ -1,11 +1,11 @@
 using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
 using AuthSubsystem.Handlers.Keycloak;
-using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
 
 namespace AuthSubsystem.Handlers.Roles;
 
-public class GetUserPermissionsQueryHandler : ICommandHandler<GetUserPermissionsQuery, AuthResult<UserPermissionsDto>>
+public class GetUserPermissionsQueryHandler : IQueryHandler<GetUserPermissionsQuery, AuthResult<UserPermissionsDto>>
 {
     private readonly IKeycloakAdminService _keycloakAdminService;
 
@@ -14,15 +14,14 @@ public class GetUserPermissionsQueryHandler : ICommandHandler<GetUserPermissions
         _keycloakAdminService = keycloakAdminService;
     }
 
-    public async Task<AuthResult<UserPermissionsDto>> HandleAsync(
-        GetUserPermissionsQuery command, CancellationToken cancellationToken = default)
+    public async Task<AuthResult<UserPermissionsDto>> HandleAsync(GetUserPermissionsQuery query)
     {
         try
         {
-            var user = await _keycloakAdminService.GetUserPermissionsByUsernameAsync(command.Username, cancellationToken);
+            var user = await _keycloakAdminService.GetUserPermissionsByUsernameAsync(query.Username);
             if (user == null)
             {
-                return AuthResult<UserPermissionsDto>.Fail(404, $"User '{command.Username}' not found.");
+                return AuthResult<UserPermissionsDto>.Fail(404, $"User '{query.Username}' not found.");
             }
 
             return AuthResult<UserPermissionsDto>.Ok(user);

@@ -6,5 +6,5 @@ namespace ServiceBus.Handlers;
 public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddServiceBus(this IServiceCollection services)
-        => services.AddScoped<IServiceBus, InMemoryServiceBus>();
+        => services.AddScoped<IServiceBus, ServiceBus>();
 }

@@ -1,11 +1,11 @@
 using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
 using AuthSubsystem.Handlers.Keycloak;
-using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
 
 namespace AuthSubsystem.Handlers.Roles;
 
-public class GetAllUsersWithRolesQueryHandler : ICommandHandler<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>
+public class GetAllUsersWithRolesQueryHandler : IQueryHandler<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>
 {
     private readonly IKeycloakAdminService _keycloakAdminService;
 
@@ -14,12 +14,11 @@ public class GetAllUsersWithRolesQueryHandler : ICommandHandler<GetAllUsersWithR
         _keycloakAdminService = keycloakAdminService;
     }
 
-    public async Task<AuthResult<IEnumerable<KeycloakUserRoleDto>>> HandleAsync(
-        GetAllUsersWithRolesQuery command, CancellationToken cancellationToken = default)
+    public async Task<AuthResult<IEnumerable<KeycloakUserRoleDto>>> HandleAsync(GetAllUsersWithRolesQuery query)
     {
         try
         {
-            var users = await _keycloakAdminService.GetAllUsersWithRolesAsync(command.UserType, cancellationToken);
+            var users = await _keycloakAdminService.GetAllUsersWithRolesAsync(query.UserType);
             return AuthResult<IEnumerable<KeycloakUserRoleDto>>.Ok(users);
         }
         catch (Exception ex)

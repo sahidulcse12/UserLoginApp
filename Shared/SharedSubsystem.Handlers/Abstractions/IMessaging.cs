@@ -1,4 +1,5 @@
 using SharedSubsystem.DTOs.Abstractions;
+using SharedSubsystem.Handlers.Events;
 
 namespace SharedSubsystem.Handlers.Abstractions;
 
@@ -14,6 +15,8 @@ public interface IEventHandler<in TEvent> where TEvent : IEvent
 
 public interface IServiceBus
 {
+    Task<IEnumerable<Event>> SendCommandAsync<TCommand>(TCommand command) where TCommand : ICommand;
+    Task<TResult> SendQueryAsync<TQuery, TResult>(TQuery query) where TQuery : IQuery<TResult>;
     Task<TResult> SendCommandAsync<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default);
     Task BroadcastEventAsync<TEvent>(TEvent @event, CancellationToken cancellationToken = default) where TEvent : IEvent;
 }

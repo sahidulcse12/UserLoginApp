@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
 
 namespace AuthSubsystem.APIs.Extensions;
 
@@ -48,8 +49,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICommandHandler<LogoutUserCommand, AuthResult<LogoutResponse>>, LogoutUserCommandHandler>();
 
         // Dynamic Role & Permission Command Handlers (Keycloak-based for MIS, Corporate, MyBdjobs)
-        services.AddScoped<ICommandHandler<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>, GetAllUsersWithRolesQueryHandler>();
-        services.AddScoped<ICommandHandler<GetUserPermissionsQuery, AuthResult<UserPermissionsDto>>, GetUserPermissionsQueryHandler>();
+        services.AddScoped<IQueryHandler<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>, GetAllUsersWithRolesQueryHandler>();
+        services.AddScoped<IQueryHandler<GetUserPermissionsQuery, AuthResult<UserPermissionsDto>>, GetUserPermissionsQueryHandler>();
         services.AddScoped<ICommandHandler<AssignRoleCommand, AuthResult<UserPermissionsDto>>, AssignRoleCommandHandler>();
 
         return services;
