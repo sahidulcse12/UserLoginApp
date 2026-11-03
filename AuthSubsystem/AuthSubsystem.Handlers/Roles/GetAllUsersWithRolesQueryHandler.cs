@@ -5,7 +5,7 @@ using SharedSubsystem.Handlers.Abstructions;
 
 namespace AuthSubsystem.Handlers.Roles;
 
-public class GetAllUsersWithRolesQueryHandler : IQueryHandler<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>
+public class GetAllUsersWithRolesQueryHandler : IQueryHandler<GetAllUsersWithRolesQuery, IEnumerable<KeycloakUserRoleDto>>
 {
     private readonly IKeycloakAdminService _keycloakAdminService;
 
@@ -14,16 +14,8 @@ public class GetAllUsersWithRolesQueryHandler : IQueryHandler<GetAllUsersWithRol
         _keycloakAdminService = keycloakAdminService;
     }
 
-    public async Task<AuthResult<IEnumerable<KeycloakUserRoleDto>>> HandleAsync(GetAllUsersWithRolesQuery query)
+    public async Task<IEnumerable<KeycloakUserRoleDto>> HandleAsync(GetAllUsersWithRolesQuery query)
     {
-        try
-        {
-            var users = await _keycloakAdminService.GetAllUsersWithRolesAsync(query.UserType);
-            return AuthResult<IEnumerable<KeycloakUserRoleDto>>.Ok(users);
-        }
-        catch (Exception ex)
-        {
-            return AuthResult<IEnumerable<KeycloakUserRoleDto>>.Fail(500, $"Failed to retrieve users: {ex.Message}");
-        }
+        return await _keycloakAdminService.GetAllUsersWithRolesAsync(query.UserType);
     }
 }

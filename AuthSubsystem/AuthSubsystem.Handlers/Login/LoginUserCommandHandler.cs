@@ -2,39 +2,37 @@ using Microsoft.Extensions.Logging;
 using AuthSubsystem.Aggregators.Entities;
 using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
-using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
+using SharedSubsystem.Handlers.Events;
 using AuthSubsystem.Handlers.Keycloak;
 using AuthSubsystem.Repositories.Abstractions;
-using SharedSubsystem.DTOs.IntegrationEvents;
+using HandlerEventId = SharedSubsystem.Handlers.Events.EventId;
 
 namespace AuthSubsystem.Handlers.Login;
 
-public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthResult<TokenResponse>>
+public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand>
 {
     private readonly IAuthRepository _authRepo;
     private readonly IKeycloakAdminService _keycloak;
-    private readonly IServiceBus _serviceBus;
     private readonly ILogger<LoginUserCommandHandler> _logger;
 
     public LoginUserCommandHandler(
         IAuthRepository authRepo,
         IKeycloakAdminService keycloak,
-        IServiceBus serviceBus,
         ILogger<LoginUserCommandHandler> logger)
     {
         _authRepo = authRepo;
         _keycloak = keycloak;
-        _serviceBus = serviceBus;
         _logger = logger;
     }
 
-    public async Task<AuthResult<TokenResponse>> HandleAsync(LoginUserCommand command, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Event>> HandleAsync(LoginUserCommand command)
     {
         var request = command.Request;
 
-        // 1. Validate Aggregates & Apply Business Rules
+        // 1. Validate Input
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            return AuthResult<TokenResponse>.Fail(400, "Username and Password are required.");
+            return EventFactory.CreateFailureEvent(HandlerEventId.UserInputError, "Username and Password are required.");
 
         // 2. Authenticate with Keycloak
         TokenResponse? tokenResponse = null;
@@ -57,7 +55,7 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
             if (migrationResult is not null)
             {
                 if (!migrationResult.Success)
-                    return migrationResult;
+                    return EventFactory.CreateFailureEvent(HandlerEventId.LoginFailed, migrationResult.ErrorMessage);
 
                 tokenResponse = migrationResult.Data;
             }
@@ -66,22 +64,16 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
         if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
         {
             var reason = keycloakLoginError ?? "Invalid credentials or Keycloak authentication failed.";
-            return AuthResult<TokenResponse>.Fail(401, reason);
+            return EventFactory.CreateFailureEvent(HandlerEventId.LoginFailed, reason);
         }
 
         // 4. Update Token in Local Database immediately
         await SyncLocalUserTokenAsync(request.Username, tokenResponse);
 
-        // 5. Sync Role & Permissions from dbo.ADMIN (runs inline; method has its own try/catch so it cannot throw)
+        // 5. Sync Role & Permissions from dbo.ADMIN
         await SyncLegacyAdminRoleIfExistsAsync(request.Username, request.Password);
 
-        // 6. Broadcast Event to ServiceBus
-        await _serviceBus.BroadcastEventAsync(new UserLoggedInEvent(
-            request.Username,
-            DateTime.UtcNow
-        ), cancellationToken);
-
-        return AuthResult<TokenResponse>.Ok(tokenResponse);
+        return EventFactory.CreateSuccessEvent(HandlerEventId.UserAuthenticated, tokenResponse);
     }
 
     private async Task<AuthResult<TokenResponse>?> HandleLegacyAdminMigrationAsync(string usernameInput, string passwordInput)
@@ -144,9 +136,6 @@ public class LoginUserCommandHandler : ICommandHandler<LoginUserCommand, AuthRes
     {
         var viewAccess = (legacyAdmin.ViewAccess ?? string.Empty).ToLowerInvariant();
 
-        // 1. If ViewAccess contains "delete" or "all" (e.g. "view,edit,delete" or full access) -> admin
-        // 2. If ViewAccess contains "edit" -> manager
-        // 3. Otherwise (only "view" or empty) -> staff
         string assignedRole;
         if (viewAccess.Contains("delete") || viewAccess.Contains("all") || legacyAdmin.AdminChk == 1)
         {

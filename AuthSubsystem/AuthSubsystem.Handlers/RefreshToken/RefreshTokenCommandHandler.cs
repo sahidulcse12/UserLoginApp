@@ -1,11 +1,11 @@
-using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
-using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
+using SharedSubsystem.Handlers.Events;
 using AuthSubsystem.Handlers.Keycloak;
 
 namespace AuthSubsystem.Handlers.RefreshToken;
 
-public class RefreshTokenCommandHandler : ICommandHandler<RefreshTokenCommand, AuthResult<TokenResponse>>
+public class RefreshTokenCommandHandler : ICommandHandler<RefreshTokenCommand>
 {
     private readonly IKeycloakAdminService _keycloak;
 
@@ -14,16 +14,16 @@ public class RefreshTokenCommandHandler : ICommandHandler<RefreshTokenCommand, A
         _keycloak = keycloak;
     }
 
-    public async Task<AuthResult<TokenResponse>> HandleAsync(RefreshTokenCommand command, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Event>> HandleAsync(RefreshTokenCommand command)
     {
         var request = command.Request;
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
-            return AuthResult<TokenResponse>.Fail(400, "RefreshToken is required.");
+            return EventFactory.CreateFailureEvent(EventId.UserInputError, "RefreshToken is required.");
 
         var tokenResponse = await _keycloak.RefreshTokenAsync(request.RefreshToken);
         if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
-            return AuthResult<TokenResponse>.Fail(401, "Invalid or expired refresh token.");
+            return EventFactory.CreateFailureEvent(EventId.UserAuthorizationFailed, "Invalid or expired refresh token.");
 
-        return AuthResult<TokenResponse>.Ok(tokenResponse);
+        return EventFactory.CreateSuccessEvent(EventId.UserAuthenticated, tokenResponse);
     }
 }

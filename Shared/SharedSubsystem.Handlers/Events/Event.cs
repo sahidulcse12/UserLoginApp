@@ -11,16 +11,21 @@ public enum EventType
 public enum EventId
 {
     // 1000s: CRUD
-    [Description("Resource Created")]
+    [Description("An event indicating the successful creation of a new resource.")]
     ResourceCreated = 1000,
-    [Description("Resource Updated")]
+
+    [Description("An event indicating the successful update of an existing resource.")]
     ResourceUpdated = 1001,
-    [Description("Resource Deleted")]
+
+    [Description("An event indicating the successful deletion of a resource.")]
     ResourceDeleted = 1002,
-    [Description("Resource Retrieved")]
+
+    [Description("An event indicating the successful retrieval of a resource.")]
     ResourceRetrieved = 1003,
+
     [Description("Resource Not Found")]
     ResourceNotFound = 1005,
+
     [Description("User Input Error")]
     UserInputError = 1006,
 
@@ -29,32 +34,38 @@ public enum EventId
     // 3000s: auth and validation
     [Description("User Authenticated")]
     UserAuthenticated = 3000,
+
     [Description("User Authorization Failed")]
     UserAuthorizationFailed = 3001,
+
     [Description("User Logged Out")]
     UserLoggedOut = 3002,
+
     [Description("Validation Error")]
     ValidationError = 3003,
+
     [Description("Security Mismatch")]
     SecurityMismatch = 3011,
+
     [Description("Login Failed")]
     LoginFailed = 3012,
+
     [Description("Cookie Not Found")]
     CookieNotFound = 3013,
+
     [Description("Invalid Session Data")]
     InvalidSessionData = 3014,
+
     [Description("Logout Failed")]
     LogoutFailed = 3015,
+
     [Description("Module Access Denied")]
     ModuleAccessDenied = 3016,
 
-    // 4000s: system
-    // 5000s: DB
-    // 6000s–8000s: domain
-
-    // 9000
+    // 9000s: system
     [Description("Internal Server Error")]
     InternalServerError = 9000,
+
     [Description("Unauthorized Access")]
     UnauthorizedAccess = 403
 }
@@ -68,18 +79,21 @@ public class Event
 
 public static class EventFactory
 {
-    public static IEnumerable<Event> CreateSuccessEvent(EventId id, object data)
+    public static IEnumerable<Event> CreateSuccessEvent(EventId id, object? data = null)
     {
+        var eventData = new List<KeyValuePair<string, object>>();
+        if (data != null)
+        {
+            eventData.Add(new KeyValuePair<string, object>("data", data));
+        }
+
         return new List<Event>
         {
             new Event
             {
                 EventType = EventType.Success,
                 EventId = id,
-                EventData = new List<KeyValuePair<string, object>>
-                {
-                    new KeyValuePair<string, object>("data", data)
-                }
+                EventData = eventData
             }
         };
     }

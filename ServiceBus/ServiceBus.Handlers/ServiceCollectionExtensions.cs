@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
 
 namespace ServiceBus.Handlers;
 

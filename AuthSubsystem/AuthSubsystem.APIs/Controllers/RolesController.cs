@@ -1,8 +1,10 @@
 using AuthSubsystem.DTOs;
-using Microsoft.AspNetCore.Mvc;
 using AuthSubsystem.DTOs.Commands;
 using Microsoft.AspNetCore.Authorization;
-using SharedSubsystem.Handlers.Abstractions;
+using Microsoft.AspNetCore.Mvc;
+using SharedSubsystem.Handlers.Abstructions;
+using SharedSubsystem.Handlers.Events;
+using HandlerEventId = SharedSubsystem.Handlers.Events.EventId;
 
 namespace AuthSubsystem.APIs.Controllers;
 
@@ -17,24 +19,39 @@ public class RolesController(IServiceBus serviceBus) : ControllerBase
     [HttpGet("users")]
     public async Task<IActionResult> GetAllUsers([FromQuery] string? userType)
     {
-        var result = await serviceBus.SendQueryAsync<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>(new GetAllUsersWithRolesQuery(userType));
-        return result.Success ? Ok(result.Data) : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
+        var result = await serviceBus.SendQueryAsync<GetAllUsersWithRolesQuery, IEnumerable<KeycloakUserRoleDto>>(new GetAllUsersWithRolesQuery(userType));
+
+        var events = result is null
+            ? EventFactory.CreateFailureEvent(HandlerEventId.ResourceNotFound)
+            : EventFactory.CreateSuccessEvent(HandlerEventId.ResourceRetrieved, result);
+
+        return Ok(events);
     }
 
     // Specifically get all MIS-Users with their roles and permissions.
     [HttpGet("mis-users")]
     public async Task<IActionResult> GetMisUsers()
     {
-        var result = await serviceBus.SendQueryAsync<GetAllUsersWithRolesQuery, AuthResult<IEnumerable<KeycloakUserRoleDto>>>(new GetAllUsersWithRolesQuery("mis"));
-        return result.Success ? Ok(result.Data) : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
+        var result = await serviceBus.SendQueryAsync<GetAllUsersWithRolesQuery, IEnumerable<KeycloakUserRoleDto>>(new GetAllUsersWithRolesQuery("mis"));
+
+        var events = result is null
+            ? EventFactory.CreateFailureEvent(HandlerEventId.ResourceNotFound)
+            : EventFactory.CreateSuccessEvent(HandlerEventId.ResourceRetrieved, result);
+
+        return Ok(events);
     }
 
     // Get permissions and assigned roles for a specific user.
     [HttpGet("user-permissions/{username}")]
     public async Task<IActionResult> GetUserPermissions(string username)
     {
-        var result = await serviceBus.SendQueryAsync<GetUserPermissionsQuery, AuthResult<UserPermissionsDto>>(new GetUserPermissionsQuery(username));
-        return result.Success ? Ok(result.Data) : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
+        var result = await serviceBus.SendQueryAsync<GetUserPermissionsQuery, UserPermissionsDto?>(new GetUserPermissionsQuery(username));
+
+        var events = result is null
+            ? EventFactory.CreateFailureEvent(HandlerEventId.ResourceNotFound, $"User '{username}' not found.")
+            : EventFactory.CreateSuccessEvent(HandlerEventId.ResourceRetrieved, result);
+
+        return Ok(events);
     }
 
     // Assign a role and permissions/attributes to any user dynamically.
@@ -44,7 +61,7 @@ public class RolesController(IServiceBus serviceBus) : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> AssignRole([FromBody] AssignRoleRequest request)
     {
-        var result = await serviceBus.SendCommandAsync(new AssignRoleCommand(request));
-        return result.Success ? Ok(result.Data) : StatusCode(result.StatusCode, new { message = result.ErrorMessage });
+        var events = await serviceBus.SendCommandAsync(new AssignRoleCommand(request));
+        return Ok(events);
     }
 }

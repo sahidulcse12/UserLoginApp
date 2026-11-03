@@ -1,11 +1,12 @@
 using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
 using AuthSubsystem.Handlers.Keycloak;
-using SharedSubsystem.Handlers.Abstractions;
+using SharedSubsystem.Handlers.Abstructions;
+using SharedSubsystem.Handlers.Events;
 
 namespace AuthSubsystem.Handlers.Roles;
 
-public class AssignRoleCommandHandler : ICommandHandler<AssignRoleCommand, AuthResult<UserPermissionsDto>>
+public class AssignRoleCommandHandler : ICommandHandler<AssignRoleCommand>
 {
     private readonly IKeycloakAdminService _keycloakAdminService;
 
@@ -14,40 +15,39 @@ public class AssignRoleCommandHandler : ICommandHandler<AssignRoleCommand, AuthR
         _keycloakAdminService = keycloakAdminService;
     }
 
-    public async Task<AuthResult<UserPermissionsDto>> HandleAsync(
-        AssignRoleCommand command, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<Event>> HandleAsync(AssignRoleCommand command)
     {
         var req = command.Request;
 
         if (string.IsNullOrWhiteSpace(req.Username))
         {
-            return AuthResult<UserPermissionsDto>.Fail(400, "Username is required.");
+            return EventFactory.CreateFailureEvent(EventId.UserInputError, "Username is required.");
         }
 
         if (string.IsNullOrWhiteSpace(req.Role))
         {
-            return AuthResult<UserPermissionsDto>.Fail(400, "Role name is required (e.g. 'admin', 'manager', 'staff', 'recruiter', 'jobseeker').");
+            return EventFactory.CreateFailureEvent(EventId.UserInputError, "Role name is required (e.g. 'admin', 'manager', 'staff', 'recruiter', 'jobseeker').");
         }
 
         try
         {
-            var success = await _keycloakAdminService.AssignRoleAndAttributesAsync(req, cancellationToken);
+            var success = await _keycloakAdminService.AssignRoleAndAttributesAsync(req);
             if (!success)
             {
-                return AuthResult<UserPermissionsDto>.Fail(500, $"Failed to assign role to user '{req.Username}'.");
+                return EventFactory.CreateFailureEvent(EventId.InternalServerError, $"Failed to assign role to user '{req.Username}'.");
             }
 
-            var updatedUser = await _keycloakAdminService.GetUserPermissionsByUsernameAsync(req.Username, cancellationToken);
+            var updatedUser = await _keycloakAdminService.GetUserPermissionsByUsernameAsync(req.Username);
             if (updatedUser == null)
             {
-                return AuthResult<UserPermissionsDto>.Fail(500, "Role assigned but failed to fetch updated user.");
+                return EventFactory.CreateFailureEvent(EventId.InternalServerError, "Role assigned but failed to fetch updated user.");
             }
 
-            return AuthResult<UserPermissionsDto>.Ok(updatedUser);
+            return EventFactory.CreateSuccessEvent(EventId.ResourceUpdated, updatedUser);
         }
         catch (Exception ex)
         {
-            return AuthResult<UserPermissionsDto>.Fail(500, $"An error occurred while assigning role: {ex.Message}");
+            return EventFactory.CreateFailureEvent(EventId.InternalServerError, $"An error occurred while assigning role: {ex.Message}");
         }
     }
 }
