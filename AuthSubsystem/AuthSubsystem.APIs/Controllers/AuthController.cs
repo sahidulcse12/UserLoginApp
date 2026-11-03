@@ -7,7 +7,6 @@ namespace AuthSubsystem.APIs.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Route("api/login")]
 public class AuthController(IServiceBus serviceBus) : ControllerBase
 {
     [HttpPost("register")]
