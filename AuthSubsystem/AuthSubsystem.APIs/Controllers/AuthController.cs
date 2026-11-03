@@ -1,7 +1,7 @@
 using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
 using Microsoft.AspNetCore.Mvc;
-using SharedSubsystem.Handlers.Abstructions;
+using ServiceBus.Handlers;
 
 namespace AuthSubsystem.APIs.Controllers;
 

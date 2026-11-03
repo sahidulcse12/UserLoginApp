@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SharedSubsystem.Handlers.Abstructions;
 
 namespace ServiceBus.Handlers;
 

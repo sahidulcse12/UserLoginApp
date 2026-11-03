@@ -2,7 +2,7 @@ using AuthSubsystem.DTOs;
 using AuthSubsystem.DTOs.Commands;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SharedSubsystem.Handlers.Abstructions;
+using ServiceBus.Handlers;
 using SharedSubsystem.Handlers.Events;
 using HandlerEventId = SharedSubsystem.Handlers.Events.EventId;
 
